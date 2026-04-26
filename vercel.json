@@ -1,16 +1,3 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs",
-  "regions": ["iad1"],
-  "_phase2_crons_stub": [
-    {
-      "_comment": "Re-enable in phase 2 by renaming '_phase2_crons_stub' to 'crons' and wiring real handlers.",
-      "path": "/api/sync/strava",
-      "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/sync/withings",
-      "schedule": "15 6 * * *"
-    }
-  ]
+  "framework": "nextjs"
 }
