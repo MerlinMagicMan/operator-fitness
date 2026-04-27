@@ -10,6 +10,7 @@ import { calculateStreak } from "@/lib/streak";
 import type {
   ActivityRow,
   BodyMetricRow,
+  DietLogRow,
   ProfileRow,
   WorkoutCompletedRow,
 } from "@/lib/operator-types";
@@ -21,6 +22,7 @@ import {
 import { PhaseStrip } from "@/components/dashboard/PhaseStrip";
 import { DashView } from "@/components/dashboard/panels/DashView";
 import { WeeklyRollup } from "@/components/dashboard/panels/WeeklyRollup";
+import { DietPanel } from "@/components/dashboard/panels/DietPanel";
 
 // Auth-gated; reads the Supabase session per request and pulls the user's
 // dashboard data.
@@ -35,7 +37,7 @@ export default async function Home() {
     redirect("/login");
   }
 
-  const [profileRes, metricsRes, workoutsRes, activitiesRes, _dietRes] =
+  const [profileRes, metricsRes, workoutsRes, activitiesRes, dietRes] =
     await Promise.all([
       supabase.from("profile").select("*").eq("id", user.id).maybeSingle(),
       supabase
@@ -69,9 +71,7 @@ export default async function Home() {
   const workoutsCompleted =
     (workoutsRes.data as WorkoutCompletedRow[] | null) ?? [];
   const activities = (activitiesRes.data as ActivityRow[] | null) ?? [];
-  // diet rows fetched here for later panels — silence unused warning until
-  // the diet panel ships in commit 7.
-  void _dietRes;
+  const dietLog = (dietRes.data as DietLogRow[] | null) ?? [];
 
   const startISO = profile?.created_at ?? new Date().toISOString();
   const phaseInfo: PhaseInfo = getPhaseInfo(startISO);
@@ -114,6 +114,13 @@ export default async function Home() {
         bodyMetrics={bodyMetrics}
         activities={activities}
         weekNum={phaseInfo.weekNum}
+      />
+    ),
+    diet: (
+      <DietPanel
+        dietLog={dietLog}
+        latestWeightLb={latestWeightLb}
+        phaseNum={phaseInfo.phase.num}
       />
     ),
   };
