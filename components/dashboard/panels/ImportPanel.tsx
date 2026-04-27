@@ -49,7 +49,7 @@ function ConnectionsSection({ strava }: { strava: StravaConnection }) {
             STRAVA
           </div>
           <div className="mt-1 text-[10px] text-zinc-500">
-            Activity sync · cron every 6h
+            Activity sync · daily ~04:00 UTC
           </div>
         </div>
 
@@ -255,8 +255,8 @@ export function ImportPanel({
         </div>
         {activities.length === 0 ? (
           <div className="py-6 text-center text-xs text-zinc-600">
-            No activities yet. Connect Strava and ride / run / lift — they
-            appear here within 6 hours of the cron firing.
+            No activities yet. Connect Strava and ride / run / lift — new
+            workouts appear here on the next cron tick (~04:00 UTC daily).
           </div>
         ) : (
           <div className="max-h-96 space-y-1 overflow-y-auto">
