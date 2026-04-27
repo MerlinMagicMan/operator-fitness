@@ -53,11 +53,11 @@ const FOUNDATION_WEEK: PhaseDef["week"] = [
   {
     tag: "Z2",
     name: "Zone 2 Aerobic",
-    duration: "60 min",
-    target: "HR 130-145 / nasal breathing",
+    duration: "45-60 min",
+    target: "HR 130-145 / Nasal breathing",
     blocks: [
       "10 min progressive warm-up rower or assault bike",
-      "45 min steady-state, conversational pace",
+      "35-50 min steady-state, conversational pace",
       "5 min cool-down + diaphragmatic breathing",
     ],
     cue: "If you can't speak in full sentences, slow down. Aerobic base lives below threshold.",
@@ -79,7 +79,7 @@ const FOUNDATION_WEEK: PhaseDef["week"] = [
   {
     tag: "Z2",
     name: "Zone 2 — Cross-Modal",
-    duration: "45 min",
+    duration: "45-60 min",
     target: "HR 130-145",
     blocks: [
       "Bike, rower, or ski erg — pick what knees feel best with",
@@ -112,12 +112,12 @@ const FOUNDATION_WEEK: PhaseDef["week"] = [
       "20 min mobility — hips, t-spine, ankles",
       "10 min sauna or contrast shower if available",
     ],
-    cue: "Mobility is the unsexy multiplier.",
+    cue: "Mobility is the unsexy multiplier. Vernon Griffith protocol.",
   },
   {
     tag: "RUCK",
-    name: "Long Z2 Ruck",
-    duration: "90 min",
+    name: "Long Ruck",
+    duration: "60-90 min",
     target: "20-30 lb pack, brisk pace",
     blocks: [
       "Outdoor terrain if possible — hills count double",
@@ -128,7 +128,7 @@ const FOUNDATION_WEEK: PhaseDef["week"] = [
   },
   {
     tag: "REST",
-    name: "Recovery Walk",
+    name: "Recovery",
     duration: "30 min",
     target: "Active recovery",
     blocks: [
@@ -455,9 +455,12 @@ export function calcMacroTargets(
 
 export type PeptideEntry = {
   name: string;
+  /** Schedule + amount per dose, e.g. "250mcg AM + 250mcg PM". */
   dose: string;
-  frequency: string;
+  /** Administration route, e.g. "subQ, near affected area". */
   route: string;
+  /** Cycle length / frequency, shown as the small subtitle under the name. */
+  duration: string;
   purpose: string;
 };
 
@@ -475,60 +478,60 @@ export const PEPTIDE_PROTOCOLS: Record<1 | 2 | 3, PeptideProtocol> = {
       {
         name: "BPC-157",
         dose: "250mcg AM + 250mcg PM",
-        frequency: "daily, 4-8 weeks",
-        route: "subQ near affected area",
+        route: "subQ, near affected area",
+        duration: "4-8 weeks",
         purpose: "Tendon, ligament, gut, vascular healing",
       },
       {
         name: "TB-500",
-        dose: "2-2.5mg",
-        frequency: "2x weekly, 4-6 weeks",
+        dose: "2-2.5mg twice weekly",
         route: "subQ",
+        duration: "4-6 weeks",
         purpose: "Systemic tissue regeneration, anti-inflammatory",
       },
       {
         name: "DSIP",
-        dose: "100mcg",
-        frequency: "pre-bed PRN",
+        dose: "100mcg pre-bed",
         route: "subQ",
+        duration: "ongoing PRN",
         purpose: "Sleep architecture, stress modulation",
       },
     ],
     notes: [
-      "BPC-157 + TB-500 ('Wolverine') is the classic recovery base.",
+      "BPC-157 + TB-500 ('Wolverine') is the classic recovery base — Mighty Warrior sells it as LOGAN.",
       "Run a deload week between cycles.",
       "Focus local injection sites for any nagging knee/hip/back issues.",
     ],
   },
   2: {
     rationale:
-      "Phase 2 cuts hardest. Tesamorelin specifically targets visceral fat. GH pulse via IPA+CJC supports recomp without shutting down endogenous production.",
+      "Phase 2 cuts hardest. Tesamorelin specifically targets visceral fat — the stubborn tier ex-football guys carry. GH pulse via IPA+CJC supports recomp without shutting down endogenous production.",
     stack: [
       {
         name: "Tesamorelin",
-        dose: "1mg",
-        frequency: "AM fasted, 5x/week, 8-12 weeks",
-        route: "subQ",
+        dose: "1mg subQ",
+        route: "AM fasted, 5x/week",
+        duration: "8-12 weeks",
         purpose:
           "Visceral adipose reduction (FDA-approved mechanism for HIV lipo)",
       },
       {
         name: "Ipamorelin + CJC-1295 no-DAC",
         dose: "100mcg + 100mcg",
-        frequency: "post-workout, optional pre-bed",
-        route: "subQ",
+        route: "subQ post-workout, optional pre-bed",
+        duration: "ongoing in cycles",
         purpose: "GH pulse — recovery and recomp",
       },
       {
         name: "BPC-157",
-        dose: "250mcg",
-        frequency: "daily maintenance as needed",
+        dose: "maintenance 250mcg/day",
         route: "subQ",
+        duration: "as needed",
         purpose: "Joint protection as running volume rises",
       },
     ],
     notes: [
-      "Tesamorelin requires consistency — skipping doses tanks results. Set alarms.",
+      "Tesa requires consistency — skipping doses tanks results. Set alarms.",
       "IPA+CJC saturation dose is 100mcg each; more isn't more.",
       "If running volume spikes, cycle BPC-157 back in for tendons.",
     ],
@@ -539,30 +542,30 @@ export const PEPTIDE_PROTOCOLS: Record<1 | 2 | 3, PeptideProtocol> = {
     stack: [
       {
         name: "Ipamorelin + CJC-1295 no-DAC",
-        dose: "100mcg + 100mcg",
-        frequency: "post-workout, ongoing",
+        dose: "100mcg + 100mcg post-workout",
         route: "subQ",
+        duration: "ongoing",
         purpose: "Recovery from speed work",
       },
       {
         name: "BPC-157 + TB-500 (LOGAN)",
         dose: "Cycle on/off in 4-week blocks",
-        frequency: "as needed",
         route: "subQ",
+        duration: "as needed",
         purpose: "Soft tissue stress from intervals/mile repeats",
       },
       {
         name: "Selank or Semax",
-        dose: "200-300mcg",
-        frequency: "AM or pre-session PRN",
-        route: "intranasal",
+        dose: "200-300mcg intranasal",
+        route: "intranasal AM/pre-session",
+        duration: "PRN",
         purpose: "Cognitive focus, anxiolysis without sedation",
       },
       {
         name: "NAD+",
-        dose: "100mg",
-        frequency: "1-2x weekly",
+        dose: "100mg subQ 1-2x/week",
         route: "subQ (slow injection)",
+        duration: "ongoing",
         purpose: "Mitochondrial support, recovery",
       },
     ],
