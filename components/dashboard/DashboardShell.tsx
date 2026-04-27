@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   Apple,
@@ -14,7 +14,12 @@ import {
 import type { PhaseInfo } from "@/lib/operator-constants";
 import { StubPanel } from "./StubPanel";
 
-type TabId = "dash" | "weekly" | "diet" | "peptides" | "import";
+export type TabId = "dash" | "weekly" | "diet" | "peptides" | "import";
+
+/** Server-rendered slot content per tab. Tabs without a slot fall back
+ *  to the stub placeholder. Lets each follow-up commit fill one slot
+ *  without touching this file again. */
+export type TabSlots = Partial<Record<TabId, ReactNode>>;
 
 const TABS: ReadonlyArray<{ id: TabId; label: string; icon: LucideIcon }> = [
   { id: "dash", label: "F1 DASH", icon: LayoutDashboard },
@@ -57,8 +62,15 @@ const STUB_BY_TAB: Record<
   },
 };
 
-export function DashboardShell({ phaseInfo }: { phaseInfo: PhaseInfo }) {
+export function DashboardShell({
+  phaseInfo,
+  slots = {},
+}: {
+  phaseInfo: PhaseInfo;
+  slots?: TabSlots;
+}) {
   const [tab, setTab] = useState<TabId>("dash");
+  const slot = slots[tab];
   const stub = STUB_BY_TAB[tab];
 
   return (
@@ -82,7 +94,9 @@ export function DashboardShell({ phaseInfo }: { phaseInfo: PhaseInfo }) {
           </span>
         </div>
       )}
-      <StubPanel label={stub.label} icon={stub.icon} message={stub.message} />
+      {slot ?? (
+        <StubPanel label={stub.label} icon={stub.icon} message={stub.message} />
+      )}
     </>
   );
 }
