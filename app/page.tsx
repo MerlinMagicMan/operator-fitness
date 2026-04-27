@@ -1,127 +1,148 @@
 import { redirect } from "next/navigation";
-import {
-  Activity,
-  Database,
-  LogOut,
-  RefreshCcw,
-  ShieldCheck,
-} from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import {
+  USER_DEFAULTS,
+  getPhaseInfo,
+  getTodayPrescription,
+  type PhaseInfo,
+} from "@/lib/operator-constants";
+import { calculateStreak } from "@/lib/streak";
+import type {
+  ActivityRow,
+  BodyMetricRow,
+  DietLogRow,
+  ProfileRow,
+  WorkoutCompletedRow,
+} from "@/lib/operator-types";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import {
+  DashboardShell,
+  type TabSlots,
+} from "@/components/dashboard/DashboardShell";
+import { PhaseStrip } from "@/components/dashboard/PhaseStrip";
+import { DashView } from "@/components/dashboard/panels/DashView";
+import { WeeklyRollup } from "@/components/dashboard/panels/WeeklyRollup";
+import { DietPanel } from "@/components/dashboard/panels/DietPanel";
+import { PeptidePanel } from "@/components/dashboard/panels/PeptidePanel";
+import { ImportPanel } from "@/components/dashboard/panels/ImportPanel";
 
-// Auth-gated page; reads the Supabase session per request.
+// Auth-gated; reads the Supabase session per request and pulls the user's
+// dashboard data.
 export const dynamic = "force-dynamic";
-
-type StatusTone = "warn" | "pending" | "success";
-
-const tone: Record<StatusTone, string> = {
-  warn: "text-[var(--color-red)]",
-  pending: "text-[var(--color-cyan)]",
-  success: "text-[var(--color-emerald)]",
-};
 
 export default async function Home() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  // Defensive — middleware should have already redirected unauthenticated
-  // requests to /login, but this guards against misconfigured matchers.
   if (!user) {
     redirect("/login");
   }
 
-  const statusGrid: ReadonlyArray<{
-    key: string;
-    label: string;
-    value: string;
-    Icon: typeof Database;
-    tone: StatusTone;
-  }> = [
-    {
-      key: "db",
-      label: "DATABASE",
-      value: "schema applied",
-      Icon: Database,
-      tone: "success",
-    },
-    {
-      key: "auth",
-      label: "AUTH",
-      value: `signed in · ${user.email ?? "unknown"}`,
-      Icon: ShieldCheck,
-      tone: "success",
-    },
-    {
-      key: "sync",
-      label: "SYNC",
-      value: "pending phase 2b",
-      Icon: RefreshCcw,
-      tone: "pending",
-    },
-  ];
+  const [profileRes, metricsRes, workoutsRes, activitiesRes, dietRes] =
+    await Promise.all([
+      supabase.from("profile").select("*").eq("id", user.id).maybeSingle(),
+      supabase
+        .from("body_metrics")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .limit(60),
+      supabase
+        .from("workouts_completed")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .limit(60),
+      supabase
+        .from("activities")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .limit(60),
+      supabase
+        .from("diet_log")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .limit(60),
+    ]);
+
+  const profile = (profileRes.data as ProfileRow | null) ?? null;
+  const bodyMetrics = (metricsRes.data as BodyMetricRow[] | null) ?? [];
+  const workoutsCompleted =
+    (workoutsRes.data as WorkoutCompletedRow[] | null) ?? [];
+  const activities = (activitiesRes.data as ActivityRow[] | null) ?? [];
+  const dietLog = (dietRes.data as DietLogRow[] | null) ?? [];
+
+  const startISO = profile?.created_at ?? new Date().toISOString();
+  const phaseInfo: PhaseInfo = getPhaseInfo(startISO);
+
+  // Latest weight: most recent body_metrics row that has a weight, or fall
+  // back to the start weight default.
+  const latestWeightLb =
+    bodyMetrics.find((m) => m.weight_lb != null)?.weight_lb ??
+    USER_DEFAULTS.startWeightLb;
+
+  const goalWeightLb = profile?.weight_goal_lb ?? USER_DEFAULTS.goalWeightLb;
+  const startWeightLb = USER_DEFAULTS.startWeightLb;
+
+  const streak = calculateStreak(
+    workoutsCompleted.map((w) => ({ date: w.date, completed: w.completed })),
+  );
+
+  const email = user.email ?? "—";
+
+  // Today's prescription + completion lookup, for the DASH tab.
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayWorkout = getTodayPrescription(phaseInfo);
+  const todayCompleted =
+    workoutsCompleted.find((w) => w.date === todayISO)?.completed === true;
+
+  const slots: TabSlots = {
+    dash: (
+      <DashView
+        workout={todayWorkout}
+        completed={todayCompleted}
+        todayISO={todayISO}
+        phaseColor={phaseInfo.phase.color}
+        bodyMetrics={bodyMetrics}
+        targetWeightLb={goalWeightLb}
+      />
+    ),
+    weekly: (
+      <WeeklyRollup
+        workoutsCompleted={workoutsCompleted}
+        bodyMetrics={bodyMetrics}
+        activities={activities}
+        weekNum={phaseInfo.weekNum}
+      />
+    ),
+    diet: (
+      <DietPanel
+        dietLog={dietLog}
+        latestWeightLb={latestWeightLb}
+        phaseNum={phaseInfo.phase.num}
+      />
+    ),
+    peptides: <PeptidePanel phaseNum={phaseInfo.phase.num} />,
+    import: <ImportPanel activities={activities} />,
+  };
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-5 py-10">
-      <header className="flex items-center justify-between border-b border-[var(--color-divider)] pb-5">
-        <div className="flex items-center gap-3">
-          <span
-            aria-hidden
-            className="operator-pulse inline-block h-2.5 w-2.5 rounded-full bg-[var(--color-amber)]"
-          />
-          <span className="text-xs uppercase tracking-[0.3em] text-[var(--color-text-dim)]">
-            OPERATOR
-          </span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="text-[10px] uppercase tracking-[0.3em] text-[var(--color-muted)]">
-            phase 2a · auth
-          </span>
-          <form action="/auth/sign-out" method="post">
-            <button
-              type="submit"
-              className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-divider)] px-2.5 py-1 text-[10px] uppercase tracking-[0.25em] text-[var(--color-text-dim)] transition hover:border-[var(--color-amber)] hover:text-[var(--color-amber)]"
-            >
-              <LogOut className="h-3 w-3" aria-hidden />
-              Sign out
-            </button>
-          </form>
-        </div>
-      </header>
-
-      <section className="space-y-2">
-        <h1 className="text-xl font-semibold text-[var(--color-amber)]">
-          OPERATOR — Foundation deployed
-        </h1>
-        <p className="text-sm text-[var(--color-text-dim)]">
-          Auth wired. Real dashboard lands once Strava + Withings sync is wired
-          in phase 2b.
-        </p>
-      </section>
-
-      <section className="grid gap-3 sm:grid-cols-3">
-        {statusGrid.map(({ key, label, value, Icon, tone: toneKey }) => (
-          <div
-            key={key}
-            className="rounded-md border border-[var(--color-divider)] bg-[var(--color-panel)] p-4"
-          >
-            <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.25em] text-[var(--color-muted)]">
-              <span>{label}</span>
-              <Icon className="h-3.5 w-3.5" aria-hidden />
-            </div>
-            <div
-              className={`mt-3 break-all text-sm font-medium ${tone[toneKey]}`}
-            >
-              {value}
-            </div>
-          </div>
-        ))}
-      </section>
-
-      <footer className="mt-auto flex items-center gap-2 border-t border-[var(--color-divider)] pt-4 text-[10px] uppercase tracking-[0.3em] text-[var(--color-muted)]">
-        <Activity className="h-3 w-3" aria-hidden />
-        <span>build · scaffold</span>
-      </footer>
-    </main>
+    <div className="flex min-h-screen flex-col bg-[var(--color-bg)] text-[var(--color-text)]">
+      <DashboardHeader
+        email={email}
+        phaseInfo={phaseInfo}
+        latestWeightLb={latestWeightLb}
+        goalWeightLb={goalWeightLb}
+        startWeightLb={startWeightLb}
+        streak={streak}
+      />
+      <DashboardShell phaseInfo={phaseInfo} slots={slots} />
+      <div className="mt-auto">
+        <PhaseStrip phaseInfo={phaseInfo} />
+      </div>
+    </div>
   );
 }
