@@ -24,6 +24,7 @@ import { DashView } from "@/components/dashboard/panels/DashView";
 import { WeeklyRollup } from "@/components/dashboard/panels/WeeklyRollup";
 import { DietPanel } from "@/components/dashboard/panels/DietPanel";
 import { PeptidePanel } from "@/components/dashboard/panels/PeptidePanel";
+import { ImportPanel } from "@/components/dashboard/panels/ImportPanel";
 
 // Auth-gated; reads the Supabase session per request and pulls the user's
 // dashboard data.
@@ -125,6 +126,7 @@ export default async function Home() {
       />
     ),
     peptides: <PeptidePanel phaseNum={phaseInfo.phase.num} />,
+    import: <ImportPanel activities={activities} />,
   };
 
   return (
