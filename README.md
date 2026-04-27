@@ -39,7 +39,10 @@ git clone <this-repo>
 cd operator-fitness
 pnpm install
 cp .env.example .env.local
-# Fill in NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY at minimum
+# Fill in at minimum:
+#   NEXT_PUBLIC_SUPABASE_URL
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY
+#   NEXT_PUBLIC_SITE_URL=http://localhost:3000
 pnpm dev
 ```
 
@@ -64,6 +67,32 @@ The schema enables Row Level Security on every table and scopes rows to
 `auth.uid()`. A trigger creates a `profile` row automatically when a new
 `auth.users` row appears.
 
+### Supabase Auth configuration
+
+Done once per Supabase project, in the dashboard:
+
+1. **Authentication → URL Configuration**
+   - **Site URL**: `https://operator-fitness.vercel.app` (or your prod domain)
+   - **Redirect URLs**: add **both**
+     - `https://operator-fitness.vercel.app/auth/callback`
+     - `http://localhost:3000/auth/callback`
+2. **Authentication → Email Templates**
+   - The default magic-link template is fine for now. No edits needed.
+
+In Vercel, set `NEXT_PUBLIC_SITE_URL` (Production / Preview / Development) to
+the URL clients will hit, e.g. `https://operator-fitness.vercel.app`.
+
+### First sign in
+
+1. Make sure `NEXT_PUBLIC_SITE_URL=http://localhost:3000` is set in
+   `.env.local` for local dev.
+2. `pnpm dev`, then open <http://localhost:3000/login>.
+3. Enter your email and submit — a magic link arrives within a few seconds.
+4. Click the link on the same device. Supabase exchanges the code for a
+   session; you land on the dashboard signed in.
+5. The `profile` trigger auto-creates your `profile` row on first sign-in;
+   no manual setup required.
+
 ## Scripts
 
 | Command             | What it does                             |
@@ -85,7 +114,19 @@ The schema enables Row Level Security on every table and scopes rows to
 - `supabase/schema.sql` with 5 tables + RLS
 - Husky + commitlint + Prettier + ESLint + release-please
 
-### Phase 2 — Sync
+### Phase 2A — Auth _(this commit)_
+
+- Email magic-link sign-in via Supabase Auth (`@supabase/ssr` cookie-based
+  sessions)
+- `middleware.ts` refreshes the session on every request and gates protected
+  routes — unauthenticated users are bounced to `/login`
+- `/login` page (war-room aesthetic, server action) → magic link →
+  `/auth/callback` exchanges the code → dashboard
+- `/auth/sign-out` route handler clears the session
+- Single-user mode: any email can sign up. Allow-lists / invite codes wait
+  until/if this turns into a Bishop product.
+
+### Phase 2B — Sync
 
 - Strava OAuth + activity import → `activities`
 - Withings OAuth + body composition import → `body_metrics`
