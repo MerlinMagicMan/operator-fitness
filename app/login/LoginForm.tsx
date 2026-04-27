@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Send, CheckCircle2 } from "lucide-react";
+import { Send, CheckCircle2, AlertTriangle } from "lucide-react";
 import { signInWithEmail, type SignInState } from "./actions";
 
 const initialState: SignInState = { status: "idle" };
@@ -20,12 +20,7 @@ export default function LoginForm({
     return <SuccessPanel email={state.email} />;
   }
 
-  const errorText =
-    state.status === "error"
-      ? state.error
-      : callbackError
-        ? "Sign-in link was invalid or expired. Request a new one."
-        : null;
+  const submitError = state.status === "error" ? state.error : null;
 
   return (
     <section className="space-y-5">
@@ -56,8 +51,25 @@ export default function LoginForm({
           />
         </label>
 
-        {errorText ? (
-          <p className="text-xs text-[var(--color-red)]">{errorText}</p>
+        {callbackError ? (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-md border border-[var(--color-red)]/40 bg-black px-3 py-2 text-xs text-[var(--color-red)]"
+          >
+            <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+            <div className="space-y-1">
+              <span className="block text-[10px] uppercase tracking-[0.25em]">
+                Auth callback error
+              </span>
+              <span className="block break-all font-medium text-[var(--color-text)]">
+                {callbackError}
+              </span>
+            </div>
+          </div>
+        ) : null}
+
+        {submitError ? (
+          <p className="text-xs text-[var(--color-red)]">{submitError}</p>
         ) : null}
 
         <button

@@ -76,11 +76,44 @@ Done once per Supabase project, in the dashboard:
    - **Redirect URLs**: add **both**
      - `https://operator-fitness.vercel.app/auth/callback`
      - `http://localhost:3000/auth/callback`
-2. **Authentication → Email Templates**
-   - The default magic-link template is fine for now. No edits needed.
+2. **Authentication → Email Templates** — see "Supabase Email Template
+   Configuration" below. **You must edit the templates** or magic-link sign-in
+   will fail.
 
 In Vercel, set `NEXT_PUBLIC_SITE_URL` (Production / Preview / Development) to
 the URL clients will hit, e.g. `https://operator-fitness.vercel.app`.
+
+### Supabase Email Template Configuration
+
+OPERATOR uses Supabase's **token-hash** flow (`verifyOtp`), not the legacy
+`/verify` redirect flow. The default email templates point at Supabase's
+`/verify` endpoint, which sets session cookies on `*.supabase.co` instead of
+your app's domain — the user clicks the link and lands at OPERATOR
+unauthenticated. Fix this by routing the link directly to the Next.js
+callback so cookies land on the correct domain.
+
+In **Authentication → Email Templates**, edit two templates:
+
+#### Magic Link
+
+Replace the link href with:
+
+```
+{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email
+```
+
+#### Confirm signup
+
+Replace the link href with:
+
+```
+{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=signup
+```
+
+`{{ .SiteURL }}` resolves to the **Site URL** you configured above. The
+callback route (`app/auth/callback/route.ts`) reads `token_hash` and `type`
+from the query string and calls `supabase.auth.verifyOtp()` server-side,
+which writes the session cookies on the OPERATOR domain.
 
 ### First sign in
 
@@ -88,8 +121,9 @@ the URL clients will hit, e.g. `https://operator-fitness.vercel.app`.
    `.env.local` for local dev.
 2. `pnpm dev`, then open <http://localhost:3000/login>.
 3. Enter your email and submit — a magic link arrives within a few seconds.
-4. Click the link on the same device. Supabase exchanges the code for a
-   session; you land on the dashboard signed in.
+4. Click the link on the same device. The OPERATOR callback verifies the
+   token-hash and sets the session cookie; you land on the dashboard signed
+   in.
 5. The `profile` trigger auto-creates your `profile` row on first sign-in;
    no manual setup required.
 

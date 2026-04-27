@@ -1,6 +1,5 @@
 "use server";
 
-import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
 export type SignInState =
@@ -21,17 +20,11 @@ export async function signInWithEmail(
     return { status: "error", error: "Enter a valid email address." };
   }
 
-  const headerStore = await headers();
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    headerStore.get("origin") ??
-    `https://${headerStore.get("host") ?? "localhost:3000"}`;
-
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      emailRedirectTo: `${siteUrl.replace(/\/$/, "")}/auth/callback`,
+      shouldCreateUser: true,
     },
   });
 
