@@ -94,6 +94,8 @@ export default async function Home() {
         completed={todayCompleted}
         todayISO={todayISO}
         phaseColor={phaseInfo.phase.color}
+        bodyMetrics={bodyMetrics}
+        targetWeightLb={goalWeightLb}
       />
     ),
   };
