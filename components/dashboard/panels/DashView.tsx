@@ -7,11 +7,9 @@ import type { BodyMetricRow } from "@/lib/operator-types";
 import { PanelHeader } from "../Primitives";
 import { TodayCard } from "./TodayCard";
 import { MetricsPanel } from "./MetricsPanel";
+import { DashCoachPanel } from "../coach/DashCoachPanel";
 
-/**
- * DASH tab content — three-column grid: TodayCard | MetricsPanel |
- * COACH. COACH lands in commit 10.
- */
+/** DASH tab content — three-column grid: TodayCard | Metrics | Coach. */
 export function DashView({
   workout,
   completed,
@@ -47,9 +45,7 @@ export function DashView({
       </section>
       <section className="flex min-h-[500px] flex-col bg-black p-4 lg:col-span-4">
         <PanelHeader icon={MessageSquare} label="COACH" />
-        <div className="flex-1 border border-zinc-900 bg-zinc-950 p-6 text-center text-xs text-zinc-500">
-          CoachPanel lands in commit 10.
-        </div>
+        <DashCoachPanel />
       </section>
     </div>
   );

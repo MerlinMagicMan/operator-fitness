@@ -13,12 +13,13 @@ import {
 } from "lucide-react";
 import type { PhaseInfo } from "@/lib/operator-constants";
 import { StubPanel } from "./StubPanel";
+import { ChatProvider } from "./coach/ChatContext";
+import { CoachDrawer } from "./coach/CoachDrawer";
 
 export type TabId = "dash" | "weekly" | "diet" | "peptides" | "import";
 
 /** Server-rendered slot content per tab. Tabs without a slot fall back
- *  to the stub placeholder. Lets each follow-up commit fill one slot
- *  without touching this file again. */
+ *  to the stub placeholder. */
 export type TabSlots = Partial<Record<TabId, ReactNode>>;
 
 const TABS: ReadonlyArray<{ id: TabId; label: string; icon: LucideIcon }> = [
@@ -36,29 +37,27 @@ const STUB_BY_TAB: Record<
   dash: {
     label: "TODAY'S OPERATION",
     icon: LayoutDashboard,
-    message:
-      "TodayCard, MetricsPanel, and CoachPanel land in the next commits.",
+    message: "Dashboard data unavailable.",
   },
   weekly: {
     label: "WEEK ROLLUP",
     icon: CalendarDays,
-    message: "Weekly rollup with daily completion grid lands in commit 6.",
+    message: "Weekly rollup unavailable.",
   },
   diet: {
     label: "NUTRITION",
     icon: Apple,
-    message: "Macro bars + meal log + phase guidance land in commit 7.",
+    message: "Diet data unavailable.",
   },
   peptides: {
     label: "PEPTIDE PROTOCOLS",
     icon: Pill,
-    message: "Phase-tabbed protocol cards land in commit 8.",
+    message: "Peptide protocol unavailable.",
   },
   import: {
     label: "ACTIVITY IMPORT",
     icon: Upload,
-    message:
-      "GPX/TCX/CSV manual import lands in commit 9. Strava OAuth in phase 2C.",
+    message: "Activity import unavailable.",
   },
 };
 
@@ -70,12 +69,17 @@ export function DashboardShell({
   slots?: TabSlots;
 }) {
   const [tab, setTab] = useState<TabId>("dash");
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const slot = slots[tab];
   const stub = STUB_BY_TAB[tab];
 
   return (
-    <>
-      <TabNav tab={tab} setTab={setTab} />
+    <ChatProvider>
+      <TabNav
+        tab={tab}
+        setTab={setTab}
+        onCoachOpen={() => setDrawerOpen(true)}
+      />
       {phaseInfo.isTestWeek && (
         <div
           className="flex items-center gap-2 border-b px-4 py-2 text-xs"
@@ -97,11 +101,20 @@ export function DashboardShell({
       {slot ?? (
         <StubPanel label={stub.label} icon={stub.icon} message={stub.message} />
       )}
-    </>
+      <CoachDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+    </ChatProvider>
   );
 }
 
-function TabNav({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
+function TabNav({
+  tab,
+  setTab,
+  onCoachOpen,
+}: {
+  tab: TabId;
+  setTab: (t: TabId) => void;
+  onCoachOpen: () => void;
+}) {
   return (
     <div className="flex items-center gap-px overflow-x-auto border-b border-zinc-800 bg-zinc-950">
       {TABS.map((t) => {
@@ -128,9 +141,9 @@ function TabNav({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
       {tab !== "dash" && (
         <button
           type="button"
-          disabled
-          className="ml-auto flex items-center gap-2 border-l border-zinc-800 px-4 py-2 text-[10px] tracking-widest text-zinc-700"
-          title="Coach drawer lands in commit 10"
+          onClick={onCoachOpen}
+          className="ml-auto flex items-center gap-2 border-l border-zinc-800 px-4 py-2 text-[10px] tracking-widest transition-colors hover:bg-[color-mix(in_oklab,var(--color-cyan)_10%,transparent)]"
+          style={{ color: "var(--color-cyan)" }}
         >
           <MessageSquare className="h-3 w-3" aria-hidden />
           ASK COACH
