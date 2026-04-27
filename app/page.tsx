@@ -11,6 +11,7 @@ import type {
   ActivityRow,
   BodyMetricRow,
   DietLogRow,
+  OAuthTokenRow,
   ProfileRow,
   WorkoutCompletedRow,
 } from "@/lib/operator-types";
@@ -24,13 +25,52 @@ import { DashView } from "@/components/dashboard/panels/DashView";
 import { WeeklyRollup } from "@/components/dashboard/panels/WeeklyRollup";
 import { DietPanel } from "@/components/dashboard/panels/DietPanel";
 import { PeptidePanel } from "@/components/dashboard/panels/PeptidePanel";
-import { ImportPanel } from "@/components/dashboard/panels/ImportPanel";
+import {
+  ImportPanel,
+  type StravaConnection,
+} from "@/components/dashboard/panels/ImportPanel";
 
 // Auth-gated; reads the Supabase session per request and pulls the user's
 // dashboard data.
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+type RawSearchParams = Record<string, string | string[] | undefined>;
+
+function singleParam(params: RawSearchParams, key: string): string | undefined {
+  const v = params[key];
+  if (Array.isArray(v)) return v[0];
+  return v;
+}
+
+function buildImportFlash(
+  params: RawSearchParams,
+): { kind: "success" | "error"; message: string } | null {
+  const connected = singleParam(params, "strava_connected");
+  if (connected === "true") {
+    return {
+      kind: "success",
+      message: "Strava connected. First sync runs on the next cron tick.",
+    };
+  }
+  const disconnected = singleParam(params, "strava_disconnected");
+  if (disconnected === "true") {
+    return {
+      kind: "success",
+      message: "Strava disconnected. Imported activities stay in your history.",
+    };
+  }
+  const error = singleParam(params, "strava_error");
+  if (error) {
+    return { kind: "error", message: `Strava error: ${error}` };
+  }
+  return null;
+}
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -39,34 +79,46 @@ export default async function Home() {
     redirect("/login");
   }
 
-  const [profileRes, metricsRes, workoutsRes, activitiesRes, dietRes] =
-    await Promise.all([
-      supabase.from("profile").select("*").eq("id", user.id).maybeSingle(),
-      supabase
-        .from("body_metrics")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .limit(60),
-      supabase
-        .from("workouts_completed")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .limit(60),
-      supabase
-        .from("activities")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .limit(60),
-      supabase
-        .from("diet_log")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .limit(60),
-    ]);
+  const [
+    profileRes,
+    metricsRes,
+    workoutsRes,
+    activitiesRes,
+    dietRes,
+    stravaTokenRes,
+  ] = await Promise.all([
+    supabase.from("profile").select("*").eq("id", user.id).maybeSingle(),
+    supabase
+      .from("body_metrics")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("date", { ascending: false })
+      .limit(60),
+    supabase
+      .from("workouts_completed")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("date", { ascending: false })
+      .limit(60),
+    supabase
+      .from("activities")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("date", { ascending: false })
+      .limit(60),
+    supabase
+      .from("diet_log")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("date", { ascending: false })
+      .limit(60),
+    supabase
+      .from("oauth_tokens")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("provider", "strava")
+      .maybeSingle(),
+  ]);
 
   const profile = (profileRes.data as ProfileRow | null) ?? null;
   const bodyMetrics = (metricsRes.data as BodyMetricRow[] | null) ?? [];
@@ -74,6 +126,7 @@ export default async function Home() {
     (workoutsRes.data as WorkoutCompletedRow[] | null) ?? [];
   const activities = (activitiesRes.data as ActivityRow[] | null) ?? [];
   const dietLog = (dietRes.data as DietLogRow[] | null) ?? [];
+  const stravaToken = (stravaTokenRes.data as OAuthTokenRow | null) ?? null;
 
   const startISO = profile?.created_at ?? new Date().toISOString();
   const phaseInfo: PhaseInfo = getPhaseInfo(startISO);
@@ -98,6 +151,20 @@ export default async function Home() {
   const todayWorkout = getTodayPrescription(phaseInfo);
   const todayCompleted =
     workoutsCompleted.find((w) => w.date === todayISO)?.completed === true;
+
+  // Strava connection state for the IMPORT tab.
+  const lastStravaSync =
+    activities.find((a) => a.source === "strava")?.created_at ?? null;
+  const stravaConnection: StravaConnection = stravaToken
+    ? {
+        connected: true,
+        athleteId: stravaToken.athlete_id,
+        lastSyncAt: lastStravaSync,
+      }
+    : { connected: false };
+
+  const params = await searchParams;
+  const importFlash = buildImportFlash(params);
 
   const slots: TabSlots = {
     dash: (
@@ -126,7 +193,13 @@ export default async function Home() {
       />
     ),
     peptides: <PeptidePanel phaseNum={phaseInfo.phase.num} />,
-    import: <ImportPanel activities={activities} />,
+    import: (
+      <ImportPanel
+        activities={activities}
+        strava={stravaConnection}
+        flash={importFlash}
+      />
+    ),
   };
 
   return (

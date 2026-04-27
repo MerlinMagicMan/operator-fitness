@@ -1,10 +1,124 @@
-import { Clock, Heart, MapPin, Upload } from "lucide-react";
+import { Activity, Clock, Heart, MapPin, Upload } from "lucide-react";
 import type { ActivityRow } from "@/lib/operator-types";
 import { PanelHeader } from "../Primitives";
 
 function fmtMD(iso: string): string {
   const d = new Date(`${iso}T00:00:00Z`);
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+}
+
+function fmtRelative(iso: string): string {
+  const ageMs = Date.now() - new Date(iso).getTime();
+  if (ageMs < 0) return "just now";
+  const minutes = Math.floor(ageMs / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+export type StravaConnection =
+  | { connected: false }
+  | {
+      connected: true;
+      athleteId: string | null;
+      lastSyncAt: string | null;
+    };
+
+function ConnectionsSection({ strava }: { strava: StravaConnection }) {
+  return (
+    <div className="border border-zinc-900 bg-black p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="text-[10px] tracking-widest text-zinc-500">
+          CONNECTIONS
+        </div>
+        <span className="text-[10px] text-zinc-600">
+          Garmin & Suunto auto-push to Strava
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
+        <div className="md:col-span-3">
+          <div
+            className="flex items-center gap-2 text-sm font-bold tracking-wide"
+            style={{ color: "var(--color-amber)" }}
+          >
+            <Activity className="h-4 w-4" aria-hidden />
+            STRAVA
+          </div>
+          <div className="mt-1 text-[10px] text-zinc-500">
+            Activity sync · cron every 6h
+          </div>
+        </div>
+
+        <div className="md:col-span-5">
+          <div className="mb-1 text-[10px] tracking-widest text-zinc-500">
+            STATUS
+          </div>
+          {strava.connected ? (
+            <>
+              <div
+                className="text-xs"
+                style={{ color: "var(--color-emerald)" }}
+              >
+                ● CONNECTED
+                {strava.athleteId ? ` · athlete ${strava.athleteId}` : ""}
+              </div>
+              <div className="mt-1 text-[10px] text-zinc-500">
+                {strava.lastSyncAt
+                  ? `Last sync: ${fmtRelative(strava.lastSyncAt)}`
+                  : "No activities synced yet"}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-xs text-zinc-400">○ NOT CONNECTED</div>
+              <div className="mt-1 text-[10px] text-zinc-500">
+                Connect Strava to pull every Garmin/Suunto run, ruck, and lift
+                into the dashboard automatically.
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="flex items-end md:col-span-4">
+          {strava.connected ? (
+            <form
+              action="/api/strava/disconnect"
+              method="post"
+              className="w-full"
+            >
+              <button
+                type="submit"
+                className="w-full border py-2 text-xs tracking-widest transition-colors hover:bg-[color-mix(in_oklab,var(--color-red)_10%,transparent)]"
+                style={{
+                  color: "var(--color-red)",
+                  borderColor:
+                    "color-mix(in oklab, var(--color-red) 50%, transparent)",
+                }}
+              >
+                DISCONNECT
+              </button>
+            </form>
+          ) : (
+            <a
+              href="/api/strava/connect"
+              className="block w-full border py-2 text-center text-xs tracking-widest transition-colors hover:bg-[color-mix(in_oklab,var(--color-amber)_10%,transparent)]"
+              style={{
+                color: "var(--color-amber)",
+                borderColor:
+                  "color-mix(in oklab, var(--color-amber) 50%, transparent)",
+              }}
+            >
+              CONNECT STRAVA
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function HistoryRow({ a }: { a: ActivityRow }) {
@@ -43,27 +157,42 @@ function HistoryRow({ a }: { a: ActivityRow }) {
   );
 }
 
-export function ImportPanel({ activities }: { activities: ActivityRow[] }) {
-  // activities is fetched newest-first; render as-is.
+export function ImportPanel({
+  activities,
+  strava,
+  flash,
+}: {
+  activities: ActivityRow[];
+  strava: StravaConnection;
+  flash?: { kind: "success" | "error"; message: string } | null;
+}) {
   return (
     <div className="space-y-4 p-4">
       <PanelHeader icon={Upload} label="ACTIVITY IMPORT" />
 
-      <div
-        className="border p-3 text-xs leading-relaxed"
-        style={{
-          backgroundColor:
-            "color-mix(in oklab, var(--color-amber) 5%, transparent)",
-          borderColor:
-            "color-mix(in oklab, var(--color-amber) 30%, transparent)",
-          color: "color-mix(in oklab, var(--color-amber) 80%, white)",
-        }}
-      >
-        <strong>PHASE 2C — Strava OAuth coming.</strong> Manual GPX/TCX/CSV
-        upload UI is rendered here for layout fidelity but parsing + write is
-        scaffolded behind importManualActivities and not wired client-side yet.
-        The import history below reads live from the activities table.
-      </div>
+      {flash && (
+        <div
+          className="border p-3 text-xs leading-relaxed"
+          style={{
+            backgroundColor:
+              flash.kind === "success"
+                ? "color-mix(in oklab, var(--color-emerald) 10%, transparent)"
+                : "color-mix(in oklab, var(--color-red) 10%, transparent)",
+            borderColor:
+              flash.kind === "success"
+                ? "color-mix(in oklab, var(--color-emerald) 30%, transparent)"
+                : "color-mix(in oklab, var(--color-red) 30%, transparent)",
+            color:
+              flash.kind === "success"
+                ? "var(--color-emerald)"
+                : "var(--color-red)",
+          }}
+        >
+          {flash.message}
+        </div>
+      )}
+
+      <ConnectionsSection strava={strava} />
 
       <div className="grid grid-cols-1 gap-px bg-zinc-900 lg:grid-cols-2">
         <div className="space-y-3 bg-black p-4">
@@ -71,18 +200,16 @@ export function ImportPanel({ activities }: { activities: ActivityRow[] }) {
             FILE UPLOAD · GPX / TCX
           </div>
           <div className="text-xs leading-relaxed text-zinc-400">
-            <span style={{ color: "var(--color-amber)" }}>GARMIN:</span>{" "}
-            connect.garmin.com → activity → gear icon → Export to GPX or TCX.
-            <br />
-            <span style={{ color: "var(--color-amber)" }}>SUUNTO:</span> Suunto
-            app → activity → share → export GPX. Or sports-tracker.com export.
+            Manual file upload is a fallback if Strava is offline or for
+            workouts that didn&apos;t make it to a watch. Wired in a later phase
+            — for now, connect Strava above.
           </div>
           <div
             aria-disabled
             className="block w-full cursor-not-allowed border-2 border-dashed border-zinc-800 py-3 text-center text-xs tracking-widest text-zinc-600"
           >
-            <Upload className="mr-2 inline h-4 w-4" aria-hidden /> MANUAL IMPORT
-            — phase 2c
+            <Upload className="mr-2 inline h-4 w-4" aria-hidden /> MANUAL UPLOAD
+            — disabled
           </div>
         </div>
 
@@ -112,7 +239,7 @@ export function ImportPanel({ activities }: { activities: ActivityRow[] }) {
                 "color-mix(in oklab, var(--color-amber) 30%, transparent)",
             }}
           >
-            IMPORT CSV — phase 2c
+            IMPORT CSV — disabled
           </button>
         </div>
       </div>
@@ -120,7 +247,7 @@ export function ImportPanel({ activities }: { activities: ActivityRow[] }) {
       <div className="border border-zinc-900 bg-black p-4">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-[10px] tracking-widest text-zinc-500">
-            IMPORT HISTORY
+            ACTIVITY HISTORY
           </div>
           <span className="text-[10px] text-zinc-600">
             {activities.length} total
@@ -128,7 +255,8 @@ export function ImportPanel({ activities }: { activities: ActivityRow[] }) {
         </div>
         {activities.length === 0 ? (
           <div className="py-6 text-center text-xs text-zinc-600">
-            No imports yet.
+            No activities yet. Connect Strava and ride / run / lift — they
+            appear here within 6 hours of the cron firing.
           </div>
         ) : (
           <div className="max-h-96 space-y-1 overflow-y-auto">
