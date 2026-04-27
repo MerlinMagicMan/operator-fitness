@@ -8,6 +8,7 @@ import {
 } from "@/lib/operator-constants";
 import { calculateStreak } from "@/lib/streak";
 import type {
+  ActivityRow,
   BodyMetricRow,
   ProfileRow,
   WorkoutCompletedRow,
@@ -19,6 +20,7 @@ import {
 } from "@/components/dashboard/DashboardShell";
 import { PhaseStrip } from "@/components/dashboard/PhaseStrip";
 import { DashView } from "@/components/dashboard/panels/DashView";
+import { WeeklyRollup } from "@/components/dashboard/panels/WeeklyRollup";
 
 // Auth-gated; reads the Supabase session per request and pulls the user's
 // dashboard data.
@@ -33,32 +35,40 @@ export default async function Home() {
     redirect("/login");
   }
 
-  const [profileRes, metricsRes, workoutsRes, _dietRes] = await Promise.all([
-    supabase.from("profile").select("*").eq("id", user.id).maybeSingle(),
-    supabase
-      .from("body_metrics")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("date", { ascending: false })
-      .limit(60),
-    supabase
-      .from("workouts_completed")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("date", { ascending: false })
-      .limit(60),
-    supabase
-      .from("diet_log")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("date", { ascending: false })
-      .limit(60),
-  ]);
+  const [profileRes, metricsRes, workoutsRes, activitiesRes, _dietRes] =
+    await Promise.all([
+      supabase.from("profile").select("*").eq("id", user.id).maybeSingle(),
+      supabase
+        .from("body_metrics")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .limit(60),
+      supabase
+        .from("workouts_completed")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .limit(60),
+      supabase
+        .from("activities")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .limit(60),
+      supabase
+        .from("diet_log")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .limit(60),
+    ]);
 
   const profile = (profileRes.data as ProfileRow | null) ?? null;
   const bodyMetrics = (metricsRes.data as BodyMetricRow[] | null) ?? [];
   const workoutsCompleted =
     (workoutsRes.data as WorkoutCompletedRow[] | null) ?? [];
+  const activities = (activitiesRes.data as ActivityRow[] | null) ?? [];
   // diet rows fetched here for later panels — silence unused warning until
   // the diet panel ships in commit 7.
   void _dietRes;
@@ -96,6 +106,14 @@ export default async function Home() {
         phaseColor={phaseInfo.phase.color}
         bodyMetrics={bodyMetrics}
         targetWeightLb={goalWeightLb}
+      />
+    ),
+    weekly: (
+      <WeeklyRollup
+        workoutsCompleted={workoutsCompleted}
+        bodyMetrics={bodyMetrics}
+        activities={activities}
+        weekNum={phaseInfo.weekNum}
       />
     ),
   };
