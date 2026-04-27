@@ -7,3 +7,5 @@ public
 pnpm-lock.yaml
 .husky
 docs/operator.jsx
+operator-artifact-source.jsx
+*.sql
