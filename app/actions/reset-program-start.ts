@@ -17,10 +17,13 @@ export async function resetProgramStart(): Promise<ActionResult> {
   if (!user) return { error: "Not authenticated" };
 
   const today = new Date().toISOString().slice(0, 10);
+  // Upsert (not update) so brand-new accounts whose profile row hasn't
+  // been materialized yet by the on-auth trigger still get a row with
+  // program_start_date set. PostgREST upsert only writes the columns
+  // we specify, so display_name/phase/weight_goal_lb stay untouched.
   const { error } = await supabase
     .from("profile")
-    .update({ program_start_date: today })
-    .eq("id", user.id);
+    .upsert({ id: user.id, program_start_date: today }, { onConflict: "id" });
 
   if (error) return { error: error.message };
 
