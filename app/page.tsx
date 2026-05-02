@@ -128,7 +128,12 @@ export default async function Home({
   const dietLog = (dietRes.data as DietLogRow[] | null) ?? [];
   const stravaToken = (stravaTokenRes.data as OAuthTokenRow | null) ?? null;
 
-  const startISO = profile?.created_at ?? new Date().toISOString();
+  // Program anchor date: prefer the explicit program_start_date (set
+  // via the RESET START button), fall back to profile.created_at, fall
+  // back to today for brand-new accounts before the trigger fires.
+  const startISO = profile?.program_start_date
+    ? `${profile.program_start_date}T00:00:00Z`
+    : (profile?.created_at ?? new Date().toISOString());
   const phaseInfo: PhaseInfo = getPhaseInfo(startISO);
 
   // Latest weight: most recent body_metrics row that has a weight, or fall
