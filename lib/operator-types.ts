@@ -11,6 +11,9 @@ export type ProfileRow = {
   phase: "foundation" | "recomp" | "performance" | null;
   weight_goal_lb: number | null;
   bf_goal_pct: number | null;
+  /** Anchor date for phase / week / day calculations (YYYY-MM-DD).
+   *  Falls back to created_at if NULL. Reset via resetProgramStart. */
+  program_start_date: string | null;
   created_at: string;
   updated_at: string;
 };
