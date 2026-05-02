@@ -63,6 +63,14 @@ supabase db push
 psql "$SUPABASE_DB_URL" -f supabase/schema.sql
 ```
 
+After schema.sql, apply each migration in `supabase/migrations/` in
+filename order (they're additive on top of the baseline). Run them in
+the Supabase SQL Editor, or via psql:
+
+```bash
+psql "$SUPABASE_DB_URL" -f supabase/migrations/0002_oauth_tokens.sql
+```
+
 The schema enables Row Level Security on every table and scopes rows to
 `auth.uid()`. A trigger creates a `profile` row automatically when a new
 `auth.users` row appears.
@@ -126,6 +134,52 @@ which writes the session cookies on the OPERATOR domain.
    in.
 5. The `profile` trigger auto-creates your `profile` row on first sign-in;
    no manual setup required.
+
+### Strava OAuth + sync
+
+Phase 2C wires Strava as the primary activity-data source — Garmin and
+Suunto both auto-push to Strava, so one OAuth covers both wearables.
+Activities flow into the `activities` table on a Vercel cron schedule.
+
+**Strava API app:** register at <https://www.strava.com/settings/api>.
+On the app's settings page, set **Authorization Callback Domain** to
+just the domain (Strava only stores the domain, not the path) — for
+example `operator-fitness.vercel.app`.
+
+**Vercel env vars** (set in Project → Settings → Environment Variables
+for Production / Preview / Development):
+
+| Var                    | Value                                       |
+| ---------------------- | ------------------------------------------- |
+| `STRAVA_CLIENT_ID`     | from the Strava app settings                |
+| `STRAVA_CLIENT_SECRET` | from the Strava app settings                |
+| `STRAVA_REDIRECT_URI`  | `https://<your-domain>/api/strava/callback` |
+| `CRON_SECRET`          | random secret; see below                    |
+
+Generate `CRON_SECRET` once and add to Vercel:
+
+```bash
+openssl rand -hex 32
+```
+
+Vercel cron jobs send this automatically as `Authorization: Bearer
+$CRON_SECRET` when called via the schedule in `vercel.json`. The
+`/api/strava/sync` route returns 401 if the header doesn't match.
+
+**Cron cadence:** the Hobby tier limits cron jobs to **once per day**.
+`vercel.json` schedules `/api/strava/sync` at `0 4 * * *` (04:00 UTC).
+Upgrade to Pro to drop this to every-30-min — change the schedule and
+redeploy.
+
+**Manual sync** (smoke test after deploying):
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" \
+  https://<your-domain>/api/strava/sync
+```
+
+Then check `select count(*) from activities where source='strava';`
+in the Supabase SQL editor.
 
 ## Scripts
 

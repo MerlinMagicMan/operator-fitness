@@ -69,4 +69,19 @@ export type ActivityRow = {
   created_at: string;
 };
 
+export type OAuthProvider = "strava" | "withings" | "garmin" | "suunto";
+
+export type OAuthTokenRow = {
+  user_id: string;
+  provider: OAuthProvider;
+  access_token: string;
+  refresh_token: string | null;
+  expires_at: string | null;
+  scope: string | null;
+  athlete_id: string | null;
+  raw: unknown;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ActionResult = { success: true } | { error: string };
