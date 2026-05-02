@@ -219,7 +219,10 @@ export default async function Home({
       />
       <DashboardShell phaseInfo={phaseInfo} slots={slots} />
       <div className="mt-auto">
-        <PhaseStrip phaseInfo={phaseInfo} />
+        <PhaseStrip
+          phaseInfo={phaseInfo}
+          programStartDate={profile?.program_start_date ?? null}
+        />
       </div>
     </div>
   );
