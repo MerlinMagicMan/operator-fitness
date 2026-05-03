@@ -8,10 +8,12 @@ import {
   BookOpen,
   CalendarRange,
   FileUp,
+  Layers,
 } from "lucide-react";
 import { PanelHeader } from "../Primitives";
 import { GenerateProgramModal } from "./programs/GenerateProgramModal";
 import { ImportProgramModal } from "./programs/ImportProgramModal";
+import { ProgramDetailModal } from "./programs/ProgramDetailModal";
 import { SessionViewModal } from "./programs/SessionViewModal";
 import { enrollProgram } from "@/app/actions/enroll-program";
 import { unenrollProgram } from "@/app/actions/unenroll-program";
@@ -35,6 +37,11 @@ const ARCHETYPE_LABEL: Record<ProgramArchetype, string> = {
   custom: "CUSTOM",
 };
 
+type DetailTarget = {
+  program: ProgramRow;
+  enrollmentId: string | null;
+};
+
 type SelectedSession = {
   session: ProgramSessionRow;
   enrollmentId: string | null;
@@ -54,6 +61,7 @@ export function ProgramsPanel({
 }) {
   const [genOpen, setGenOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [detail, setDetail] = useState<DetailTarget | null>(null);
   const [selected, setSelected] = useState<SelectedSession | null>(null);
 
   const sessionsByProgram = useMemo(() => {
@@ -85,6 +93,16 @@ export function ProgramsPanel({
     }
     return map;
   }, [completions]);
+
+  const detailSessions = useMemo(() => {
+    if (!detail) return [];
+    return sessionsByProgram.get(detail.program.id) ?? [];
+  }, [detail, sessionsByProgram]);
+
+  const detailCompletions = useMemo(() => {
+    if (!detail || !detail.enrollmentId) return [];
+    return completions.filter((c) => c.enrollment_id === detail.enrollmentId);
+  }, [detail, completions]);
 
   const selectedCompletion = useMemo(() => {
     if (!selected || !selected.enrollmentId) return null;
@@ -148,15 +166,8 @@ export function ProgramsPanel({
               <ProgramRowItem
                 key={p.id}
                 program={p}
-                onView={(session) =>
-                  setSelected({
-                    session,
-                    enrollmentId: null,
-                    programName: p.name,
-                  })
-                }
-                firstSession={sessionsByProgram.get(p.id)?.[0] ?? null}
                 sessionCount={sessionsByProgram.get(p.id)?.length ?? 0}
+                onView={() => setDetail({ program: p, enrollmentId: null })}
               />
             ))}
           </ul>
@@ -174,7 +185,6 @@ export function ProgramsPanel({
             {activeEnrollments.map((e) => {
               const program = programs.find((p) => p.id === e.program_id);
               if (!program) return null;
-              const programSessions = sessionsByProgram.get(program.id) ?? [];
               const inner = completionsByEnrollment.get(e.id);
               const completedCount = inner?.size ?? 0;
               return (
@@ -182,15 +192,8 @@ export function ProgramsPanel({
                   key={e.id}
                   program={program}
                   enrollment={e}
-                  programSessions={programSessions}
                   completedCount={completedCount}
-                  onSelect={(session) =>
-                    setSelected({
-                      session,
-                      enrollmentId: e.id,
-                      programName: program.name,
-                    })
-                  }
+                  onOpen={() => setDetail({ program, enrollmentId: e.id })}
                 />
               );
             })}
@@ -202,6 +205,22 @@ export function ProgramsPanel({
       <ImportProgramModal
         open={importOpen}
         onClose={() => setImportOpen(false)}
+      />
+      <ProgramDetailModal
+        open={detail !== null}
+        onClose={() => setDetail(null)}
+        program={detail?.program ?? null}
+        sessions={detailSessions}
+        enrollmentId={detail?.enrollmentId ?? null}
+        completions={detailCompletions}
+        onOpenSession={(session) => {
+          if (!detail) return;
+          setSelected({
+            session,
+            enrollmentId: detail.enrollmentId,
+            programName: detail.program.name,
+          });
+        }}
       />
       <SessionViewModal
         open={selected !== null}
@@ -217,14 +236,12 @@ export function ProgramsPanel({
 
 function ProgramRowItem({
   program,
-  firstSession,
   sessionCount,
   onView,
 }: {
   program: ProgramRow;
-  firstSession: ProgramSessionRow | null;
   sessionCount: number;
-  onView: (session: ProgramSessionRow) => void;
+  onView: () => void;
 }) {
   const expectedCount = program.weeks * program.days_per_week;
   const incomplete = sessionCount !== expectedCount;
@@ -264,15 +281,13 @@ function ProgramRowItem({
           )}
         </div>
         <div className="flex flex-none items-center gap-1">
-          {firstSession && (
-            <button
-              type="button"
-              onClick={() => onView(firstSession)}
-              className="border border-zinc-700 px-2 py-1 text-[10px] tracking-widest text-zinc-300 hover:text-zinc-100"
-            >
-              VIEW
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onView}
+            className="border border-zinc-700 px-2 py-1 text-[10px] tracking-widest text-zinc-300 hover:text-zinc-100"
+          >
+            VIEW
+          </button>
           <EnrollButton programId={program.id} />
           <DeleteButton programId={program.id} programName={program.name} />
         </div>
@@ -335,15 +350,13 @@ function DeleteButton({
 function ActiveEnrollmentItem({
   program,
   enrollment,
-  programSessions,
   completedCount,
-  onSelect,
+  onOpen,
 }: {
   program: ProgramRow;
   enrollment: ProgramEnrollmentRow;
-  programSessions: ProgramSessionRow[];
   completedCount: number;
-  onSelect: (session: ProgramSessionRow) => void;
+  onOpen: () => void;
 }) {
   const totalSessions = program.weeks * program.days_per_week;
   return (
@@ -356,32 +369,21 @@ function ActiveEnrollmentItem({
             {program.weeks} · {completedCount}/{totalSessions} done
           </div>
         </div>
-        <UnenrollButton enrollmentId={enrollment.id} />
-      </div>
-      <div className="mt-3 space-y-2">
-        {Array.from({ length: program.weeks }, (_, i) => i + 1).map((week) => {
-          const weekSessions = programSessions.filter((s) => s.week === week);
-          if (weekSessions.length === 0) return null;
-          return (
-            <div key={week}>
-              <div className="text-[10px] tracking-widest text-zinc-500">
-                WEEK {week}
-              </div>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {weekSessions.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => onSelect(s)}
-                    className="border border-zinc-800 px-2 py-1 text-[10px] tracking-widest text-zinc-400 hover:border-zinc-600 hover:text-zinc-100"
-                  >
-                    D{s.day_of_week}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+        <div className="flex flex-none items-center gap-1">
+          <button
+            type="button"
+            onClick={onOpen}
+            className="flex items-center gap-1 border px-2 py-1 text-[10px] tracking-widest"
+            style={{
+              borderColor: "var(--color-amber)",
+              color: "var(--color-amber)",
+            }}
+          >
+            <Layers className="h-2.5 w-2.5" aria-hidden />
+            OPEN
+          </button>
+          <UnenrollButton enrollmentId={enrollment.id} />
+        </div>
       </div>
     </li>
   );

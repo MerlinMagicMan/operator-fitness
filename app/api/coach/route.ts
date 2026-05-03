@@ -242,18 +242,77 @@ function formatActivePrograms(summaries: ActiveProgramSummary[]): string {
     .join("\n");
 }
 
+type LibraryProgramSummary = {
+  name: string;
+  archetype: string;
+  weeks: number;
+  daysPerWeek: number;
+  sessionMinutesAvg: number | null;
+  focusAreas: string[];
+  equipment: string[];
+  source: string;
+  createdAt: string;
+};
+
+function buildLibraryProgramSummaries({
+  programs,
+  enrollments,
+}: {
+  programs: ProgramRow[];
+  enrollments: ProgramEnrollmentRow[];
+}): LibraryProgramSummary[] {
+  const activeProgramIds = new Set(
+    enrollments.filter((e) => e.status === "active").map((e) => e.program_id),
+  );
+  return programs
+    .filter((p) => !activeProgramIds.has(p.id))
+    .map((p) => ({
+      name: p.name,
+      archetype: p.archetype,
+      weeks: p.weeks,
+      daysPerWeek: p.days_per_week,
+      sessionMinutesAvg: p.session_minutes_avg,
+      focusAreas: p.focus_areas,
+      equipment: p.equipment,
+      source: p.source,
+      createdAt: p.created_at,
+    }));
+}
+
+function formatLibraryPrograms(summaries: LibraryProgramSummary[]): string {
+  if (summaries.length === 0) {
+    return "  (none — no other programs in the library)";
+  }
+  return summaries
+    .map((s) => {
+      const minutes = s.sessionMinutesAvg
+        ? `, ~${s.sessionMinutesAvg} min`
+        : "";
+      const focus = s.focusAreas.length
+        ? ` focus: ${s.focusAreas.join(", ")};`
+        : "";
+      const equip = s.equipment.length
+        ? ` equipment: ${s.equipment.join(", ")};`
+        : "";
+      return `  - ${s.name} [${s.archetype}, ${s.source}] ${s.weeks}w x ${s.daysPerWeek}d/wk${minutes};${focus}${equip}`;
+    })
+    .join("\n");
+}
+
 function buildSystemPrompt({
   profile,
   metrics,
   workouts,
   diet,
   activePrograms,
+  libraryPrograms,
 }: {
   profile: ProfileRow | null;
   metrics: BodyMetricRow[];
   workouts: WorkoutCompletedRow[];
   diet: DietLogRow[];
   activePrograms: ActiveProgramSummary[];
+  libraryPrograms: LibraryProgramSummary[];
 }): string {
   const startISO = profile?.created_at ?? new Date().toISOString();
   const phaseInfo = getPhaseInfo(startISO);
@@ -300,8 +359,13 @@ ${phasePlanSummary}
 ACTIVE PEPTIDE PROTOCOL (Phase ${phaseInfo.phase.num}):
 ${peptide.stack.map((p) => `  - ${p.name}: ${p.dose} (${p.route}); ${p.duration}; ${p.purpose}`).join("\n")}
 
-ACTIVE PROGRAMS (overlays running alongside the 44-week build):
+ACTIVE PROGRAMS (overlays currently running alongside the 44-week build):
 ${formatActivePrograms(activePrograms)}
+
+PROGRAM LIBRARY (other programs Joe owns; not currently enrolled):
+${formatLibraryPrograms(libraryPrograms)}
+
+You can refer to library programs by name when Joe asks about them. He has to enroll a library program before sessions can be checked off, but you can describe what's in it, compare it to what he's running now, or recommend enrolling.
 
 TOOLS:
 - log_meal_from_text: call this whenever Joe asks to log/record/save a meal. Pass his exact words as text. After it returns, briefly confirm what was saved and the totals.
@@ -405,12 +469,18 @@ export async function POST(request: Request): Promise<Response> {
     completions: sessionCompletions,
   });
 
+  const libraryPrograms = buildLibraryProgramSummaries({
+    programs,
+    enrollments,
+  });
+
   const systemPrompt = buildSystemPrompt({
     profile,
     metrics,
     workouts,
     diet,
     activePrograms,
+    libraryPrograms,
   });
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
