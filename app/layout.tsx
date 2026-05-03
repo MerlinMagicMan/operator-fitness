@@ -11,13 +11,8 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "OPERATOR",
   },
-  icons: {
-    icon: [
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-    ],
-    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
-  },
+  // Favicon + apple-touch-icon are auto-detected from app/icon.png and
+  // app/apple-icon.png by Next.js — no explicit `icons` metadata needed.
 };
 
 export const viewport: Viewport = {
