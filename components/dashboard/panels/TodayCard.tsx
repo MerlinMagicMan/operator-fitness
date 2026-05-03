@@ -15,6 +15,7 @@ import {
   type PhaseColor,
 } from "@/lib/operator-constants";
 import { markWorkoutCompleteForm } from "@/app/actions/mark-workout-complete";
+import { TodayOverlay, type TodayOverlayItem } from "./TodayOverlay";
 
 const ICON_BY_TAG: Record<string, LucideIcon> = {
   Z2: Heart,
@@ -43,11 +44,13 @@ export function TodayCard({
   completed,
   todayISO,
   phaseColor,
+  overlays = [],
 }: {
   workout: DayPrescription;
   completed: boolean;
   todayISO: string;
   phaseColor: PhaseColor;
+  overlays?: TodayOverlayItem[];
 }) {
   const Icon = ICON_BY_TAG[workout.tag] ?? Heart;
   const accent = ACCENT_VAR[phaseColor];
@@ -128,6 +131,8 @@ export function TodayCard({
           </button>
         </form>
       )}
+
+      <TodayOverlay items={overlays} />
     </div>
   );
 }

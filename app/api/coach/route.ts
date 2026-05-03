@@ -14,6 +14,10 @@ import type {
   MealInput,
   MealType,
   ProfileRow,
+  ProgramEnrollmentRow,
+  ProgramRow,
+  ProgramSessionRow,
+  SessionCompletionRow,
   WorkoutCompletedRow,
 } from "@/lib/operator-types";
 import { parseMealText } from "@/lib/food/parse";
@@ -154,16 +158,102 @@ async function runCoachTool(
   }
 }
 
+type ActiveProgramSummary = {
+  name: string;
+  archetype: string;
+  currentWeek: number;
+  totalWeeks: number;
+  daysPerWeek: number;
+  focusAreas: string[];
+  equipment: string[];
+  todaySessionTitle: string | null;
+  todaySessionCompleted: boolean;
+  completedCount: number;
+  totalSessions: number;
+};
+
+function buildActiveProgramSummaries({
+  programs,
+  enrollments,
+  sessions,
+  completions,
+}: {
+  programs: ProgramRow[];
+  enrollments: ProgramEnrollmentRow[];
+  sessions: ProgramSessionRow[];
+  completions: SessionCompletionRow[];
+}): ActiveProgramSummary[] {
+  const jsDay = new Date().getDay();
+  const todayDayOfWeek = ((jsDay + 6) % 7) + 1;
+
+  return enrollments
+    .filter((e) => e.status === "active")
+    .map((enrollment): ActiveProgramSummary | null => {
+      const program = programs.find((p) => p.id === enrollment.program_id);
+      if (!program) return null;
+      const programSessions = sessions.filter(
+        (s) => s.program_id === program.id,
+      );
+      const todaySession =
+        programSessions.find(
+          (s) =>
+            s.week === enrollment.current_week &&
+            s.day_of_week === todayDayOfWeek,
+        ) ?? null;
+      const enrollmentCompletions = completions.filter(
+        (c) => c.enrollment_id === enrollment.id,
+      );
+      const todayCompleted =
+        todaySession !== null &&
+        enrollmentCompletions.some(
+          (c) =>
+            c.week === todaySession.week &&
+            c.day_of_week === todaySession.day_of_week,
+        );
+      return {
+        name: program.name,
+        archetype: program.archetype,
+        currentWeek: enrollment.current_week,
+        totalWeeks: program.weeks,
+        daysPerWeek: program.days_per_week,
+        focusAreas: program.focus_areas,
+        equipment: program.equipment,
+        todaySessionTitle: todaySession?.title ?? null,
+        todaySessionCompleted: todayCompleted,
+        completedCount: enrollmentCompletions.length,
+        totalSessions: program.weeks * program.days_per_week,
+      };
+    })
+    .filter((s): s is ActiveProgramSummary => s !== null);
+}
+
+function formatActivePrograms(summaries: ActiveProgramSummary[]): string {
+  if (summaries.length === 0) return "  (none — no programs currently active)";
+  return summaries
+    .map((s) => {
+      const today = s.todaySessionTitle
+        ? `today's session: "${s.todaySessionTitle}"${s.todaySessionCompleted ? " (DONE)" : ""}`
+        : "no session scheduled today";
+      const focus = s.focusAreas.length
+        ? ` focus: ${s.focusAreas.join(", ")};`
+        : "";
+      return `  - ${s.name} [${s.archetype}] wk ${s.currentWeek}/${s.totalWeeks}, ${s.daysPerWeek}d/wk, ${s.completedCount}/${s.totalSessions} sessions done;${focus} ${today}`;
+    })
+    .join("\n");
+}
+
 function buildSystemPrompt({
   profile,
   metrics,
   workouts,
   diet,
+  activePrograms,
 }: {
   profile: ProfileRow | null;
   metrics: BodyMetricRow[];
   workouts: WorkoutCompletedRow[];
   diet: DietLogRow[];
+  activePrograms: ActiveProgramSummary[];
 }): string {
   const startISO = profile?.created_at ?? new Date().toISOString();
   const phaseInfo = getPhaseInfo(startISO);
@@ -210,6 +300,9 @@ ${phasePlanSummary}
 ACTIVE PEPTIDE PROTOCOL (Phase ${phaseInfo.phase.num}):
 ${peptide.stack.map((p) => `  - ${p.name}: ${p.dose} (${p.route}); ${p.duration}; ${p.purpose}`).join("\n")}
 
+ACTIVE PROGRAMS (overlays running alongside the 44-week build):
+${formatActivePrograms(activePrograms)}
+
 TOOLS:
 - log_meal_from_text: call this whenever Joe asks to log/record/save a meal. Pass his exact words as text. After it returns, briefly confirm what was saved and the totals.
 
@@ -255,7 +348,16 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const since = isoDaysAgo(HISTORY_DAYS);
-  const [profileR, metricsR, workoutsR, dietR] = await Promise.all([
+  const [
+    profileR,
+    metricsR,
+    workoutsR,
+    dietR,
+    programsR,
+    enrollmentsR,
+    sessionsR,
+    completionsR,
+  ] = await Promise.all([
     supabase.from("profile").select("*").eq("id", user.id).maybeSingle(),
     supabase
       .from("body_metrics")
@@ -275,18 +377,40 @@ export async function POST(request: Request): Promise<Response> {
       .eq("user_id", user.id)
       .gte("date", since)
       .order("date", { ascending: false }),
+    supabase.from("programs").select("*").eq("owner_user_id", user.id),
+    supabase
+      .from("program_enrollments")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("status", "active"),
+    supabase.from("program_sessions").select("*"),
+    supabase.from("session_completions").select("*"),
   ]);
 
   const profile = (profileR.data as ProfileRow | null) ?? null;
   const metrics = (metricsR.data as BodyMetricRow[] | null) ?? [];
   const workouts = (workoutsR.data as WorkoutCompletedRow[] | null) ?? [];
   const diet = (dietR.data as DietLogRow[] | null) ?? [];
+  const programs = (programsR.data as ProgramRow[] | null) ?? [];
+  const enrollments =
+    (enrollmentsR.data as ProgramEnrollmentRow[] | null) ?? [];
+  const programSessions = (sessionsR.data as ProgramSessionRow[] | null) ?? [];
+  const sessionCompletions =
+    (completionsR.data as SessionCompletionRow[] | null) ?? [];
+
+  const activePrograms = buildActiveProgramSummaries({
+    programs,
+    enrollments,
+    sessions: programSessions,
+    completions: sessionCompletions,
+  });
 
   const systemPrompt = buildSystemPrompt({
     profile,
     metrics,
     workouts,
     diet,
+    activePrograms,
   });
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
