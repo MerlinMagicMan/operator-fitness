@@ -3,7 +3,15 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Loader2, Mic, MicOff, Send, Trash2 } from "lucide-react";
 import { logMeals } from "@/app/actions/log-meal";
-import type { MealInput, ParsedMealItem } from "@/lib/operator-types";
+import type { MealInput, MealType, ParsedMealItem } from "@/lib/operator-types";
+import {
+  MEAL_TYPES,
+  MEAL_TYPE_LABEL,
+  combineDateAndTime,
+  localTimeHHMM,
+  suggestMealTypeForDate,
+} from "@/lib/food/meal-type";
+import { MealAnalysisCard } from "./MealAnalysisCard";
 
 type SpeechRecognitionLike = {
   lang: string;
@@ -95,6 +103,49 @@ function SourceBadge({ source }: { source: ParsedMealItem["source"] }) {
   );
 }
 
+function MealTypePills({
+  value,
+  onChange,
+}: {
+  value: MealType;
+  onChange: (t: MealType) => void;
+}) {
+  return (
+    <div className="flex gap-1">
+      {MEAL_TYPES.map((t) => {
+        const active = value === t;
+        return (
+          <button
+            key={t}
+            type="button"
+            onClick={() => onChange(t)}
+            className="flex-1 border px-2 py-1 text-[9px] font-bold tracking-widest transition-colors"
+            style={{
+              color: active
+                ? "var(--color-amber)"
+                : "var(--color-zinc-500, #71717a)",
+              borderColor: active
+                ? "var(--color-amber)"
+                : "var(--color-zinc-800, #27272a)",
+              backgroundColor: active
+                ? "color-mix(in oklab, var(--color-amber) 8%, transparent)"
+                : "transparent",
+            }}
+          >
+            {MEAL_TYPE_LABEL[t]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+type SavedMeal = {
+  items: ParsedMealItem[];
+  mealType: MealType;
+  eatenAt: string;
+};
+
 export function QuickLogMeal({
   date,
   onAfterSave,
@@ -105,9 +156,14 @@ export function QuickLogMeal({
   const [text, setText] = useState("");
   const [parsing, setParsing] = useState(false);
   const [items, setItems] = useState<ParsedMealItem[] | null>(null);
+  const [mealType, setMealType] = useState<MealType>(() =>
+    suggestMealTypeForDate(),
+  );
+  const [time, setTime] = useState<string>(() => localTimeHHMM());
   const [error, setError] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const [saving, startSaving] = useTransition();
+  const [savedMeal, setSavedMeal] = useState<SavedMeal | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const speechAvailable =
@@ -163,6 +219,9 @@ export function QuickLogMeal({
     setParsing(true);
     setError(null);
     setItems(null);
+    setSavedMeal(null);
+    setMealType(suggestMealTypeForDate());
+    setTime(localTimeHHMM());
     try {
       const res = await fetch("/api/food/parse", {
         method: "POST",
@@ -201,6 +260,7 @@ export function QuickLogMeal({
 
   const save = () => {
     if (!items || items.length === 0) return;
+    const eatenAt = combineDateAndTime(date, time);
     const payload: MealInput[] = items.map((it) => ({
       date,
       meal: it.name,
@@ -210,7 +270,10 @@ export function QuickLogMeal({
       fat_g: it.fat_g,
       source: it.source,
       fdc_id: it.fdc_id,
+      meal_type: mealType,
+      eaten_at: eatenAt,
     }));
+    const snapshot = items;
     startSaving(async () => {
       const result = await logMeals(payload);
       if ("error" in result) {
@@ -220,6 +283,11 @@ export function QuickLogMeal({
       setItems(null);
       setText("");
       setError(null);
+      setSavedMeal({
+        items: snapshot,
+        mealType,
+        eatenAt: eatenAt ?? new Date().toISOString(),
+      });
       onAfterSave?.();
     });
   };
@@ -228,6 +296,8 @@ export function QuickLogMeal({
     setItems(null);
     setError(null);
   };
+
+  const dismissAnalysis = () => setSavedMeal(null);
 
   return (
     <div className="mb-3 border border-zinc-900 bg-zinc-950/40 p-3">
@@ -313,6 +383,29 @@ export function QuickLogMeal({
           <div className="text-[10px] tracking-widest text-zinc-500">
             CONFIRM &amp; EDIT
           </div>
+
+          <div className="space-y-2 border border-zinc-900 bg-black p-2">
+            <div>
+              <div className="mb-1 text-[9px] tracking-widest text-zinc-600">
+                MEAL
+              </div>
+              <MealTypePills value={mealType} onChange={setMealType} />
+            </div>
+            <div>
+              <label className="block">
+                <span className="mb-1 block text-[9px] tracking-widest text-zinc-600">
+                  TIME
+                </span>
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  className="border border-zinc-800 bg-black px-2 py-1 text-xs text-zinc-100 focus:border-[var(--color-amber)] focus:outline-none"
+                />
+              </label>
+            </div>
+          </div>
+
           {items.map((item, i) => (
             <div
               key={i}
@@ -397,6 +490,18 @@ export function QuickLogMeal({
                 : `LOG ${items.length} ITEM${items.length === 1 ? "" : "S"}`}
             </button>
           </div>
+        </div>
+      )}
+
+      {savedMeal && (
+        <div className="mt-3 border-t border-zinc-900 pt-3">
+          <MealAnalysisCard
+            scope="meal"
+            mealType={savedMeal.mealType}
+            eatenAt={savedMeal.eatenAt}
+            items={savedMeal.items}
+            onDismiss={dismissAnalysis}
+          />
         </div>
       )}
     </div>

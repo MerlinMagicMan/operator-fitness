@@ -2,11 +2,22 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import type { ActionResult, MealInput } from "@/lib/operator-types";
+import type { ActionResult, MealInput, MealType } from "@/lib/operator-types";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MEAL_TYPES = new Set<MealType>(["breakfast", "lunch", "dinner", "snack"]);
 const MAX_MEAL_LEN = 200;
 const MAX_BULK_ROWS = 20;
+
+function isValidMealType(v: unknown): v is MealType {
+  return typeof v === "string" && MEAL_TYPES.has(v as MealType);
+}
+
+function isValidIsoTimestamp(v: unknown): v is string {
+  if (typeof v !== "string" || v === "") return false;
+  const t = Date.parse(v);
+  return Number.isFinite(t);
+}
 
 function num(value: FormDataEntryValue | null): number | null {
   if (typeof value !== "string") return null;
@@ -41,6 +52,8 @@ function sanitizeMeal(input: MealInput): MealInput | { error: string } {
     fat_g: input.fat_g != null && input.fat_g >= 0 ? input.fat_g : null,
     source,
     fdc_id: source === "usda" && input.fdc_id ? input.fdc_id : null,
+    meal_type: isValidMealType(input.meal_type) ? input.meal_type : null,
+    eaten_at: isValidIsoTimestamp(input.eaten_at) ? input.eaten_at : null,
   };
 }
 
@@ -69,6 +82,11 @@ export async function logMeal(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
+  const mealTypeRaw = formData.get("meal_type");
+  const meal_type = isValidMealType(mealTypeRaw) ? mealTypeRaw : null;
+  const eatenAtRaw = formData.get("eaten_at");
+  const eaten_at = isValidIsoTimestamp(eatenAtRaw) ? eatenAtRaw : null;
+
   const { error } = await supabase.from("diet_log").insert({
     user_id: user.id,
     date,
@@ -82,6 +100,8 @@ export async function logMeal(
     fat_g: num(formData.get("fat_g")),
     source: "manual",
     fdc_id: null,
+    meal_type,
+    eaten_at,
   });
 
   if (error) return { error: error.message };
@@ -129,6 +149,8 @@ export async function logMeals(
       fat_g: m.fat_g,
       source: m.source,
       fdc_id: m.fdc_id,
+      meal_type: m.meal_type,
+      eaten_at: m.eaten_at,
     })),
   );
 

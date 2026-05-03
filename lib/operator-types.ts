@@ -43,6 +43,7 @@ export type WorkoutCompletedRow = {
 };
 
 export type MealSource = "usda" | "estimate" | "manual";
+export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 
 export type DietLogRow = {
   id: string;
@@ -55,6 +56,8 @@ export type DietLogRow = {
   fat_g: number | null;
   source: MealSource | null;
   fdc_id: string | null;
+  meal_type: MealType | null;
+  eaten_at: string | null;
   created_at: string;
 };
 
@@ -81,6 +84,8 @@ export type MealInput = {
   fat_g: number | null;
   source: MealSource;
   fdc_id: string | null;
+  meal_type: MealType | null;
+  eaten_at: string | null;
 };
 
 export type ActivityRow = {

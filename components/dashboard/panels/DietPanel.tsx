@@ -1,17 +1,35 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Apple, ChevronRight, Plus, X } from "lucide-react";
+import { Apple, ChevronRight, Plus, Sparkles, X } from "lucide-react";
 import {
   DIET_GUIDANCE,
   USER_DEFAULTS,
   calcMacroTargets,
 } from "@/lib/operator-constants";
-import type { DietLogRow } from "@/lib/operator-types";
+import type { DietLogRow, MealType } from "@/lib/operator-types";
+import { MEAL_TYPE_LABEL, formatTimeOfDay } from "@/lib/food/meal-type";
 import { PanelHeader } from "../Primitives";
 import { DietLogModal } from "./DietLogModal";
+import { MealAnalysisCard } from "./MealAnalysisCard";
 import { QuickLogMeal } from "./QuickLogMeal";
 import { deleteMealEntryForm } from "@/app/actions/delete-meal-entry";
+
+const MEAL_GROUP_ORDER: (MealType | "other")[] = [
+  "breakfast",
+  "lunch",
+  "dinner",
+  "snack",
+  "other",
+];
+
+const MEAL_GROUP_LABEL: Record<MealType | "other", string> = {
+  breakfast: MEAL_TYPE_LABEL.breakfast,
+  lunch: MEAL_TYPE_LABEL.lunch,
+  dinner: MEAL_TYPE_LABEL.dinner,
+  snack: MEAL_TYPE_LABEL.snack,
+  other: "OTHER",
+};
 
 const MACRO_COLOR: Record<MacroTone, string> = {
   amber: "var(--color-amber)",
@@ -91,35 +109,116 @@ function SourceDot({ source }: { source: DietLogRow["source"] }) {
   );
 }
 
-function MealRow({ entry }: { entry: DietLogRow }) {
+function MealRow({
+  entry,
+  expanded,
+  onToggle,
+}: {
+  entry: DietLogRow;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const time = entry.eaten_at ? formatTimeOfDay(entry.eaten_at) : null;
   return (
-    <div className="flex items-center justify-between border-b border-zinc-900 pb-1 text-xs">
-      <span className="flex flex-1 items-center gap-1.5 truncate text-zinc-300">
-        <SourceDot source={entry.source} />
-        <span className="truncate">{entry.meal}</span>
-      </span>
-      <div className="flex flex-shrink-0 items-center gap-2">
-        {entry.calories != null && (
-          <span style={{ color: "var(--color-amber)" }}>
-            {Math.round(entry.calories)}c
-          </span>
-        )}
-        {entry.protein_g != null && (
-          <span style={{ color: "var(--color-emerald)" }}>
-            {Math.round(entry.protein_g)}p
-          </span>
-        )}
-        <form action={deleteMealEntryForm}>
-          <input type="hidden" name="id" value={entry.id} />
+    <div className="border-b border-zinc-900 pb-1">
+      <div className="flex items-center justify-between text-xs">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex flex-1 items-center gap-1.5 truncate text-left text-zinc-300 hover:text-zinc-100"
+          aria-label={`${expanded ? "Collapse" : "Analyze"} ${entry.meal}`}
+        >
+          <SourceDot source={entry.source} />
+          <span className="truncate">{entry.meal}</span>
+          {time && (
+            <span className="ml-1 flex-shrink-0 text-[10px] text-zinc-600">
+              {time}
+            </span>
+          )}
+        </button>
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {entry.calories != null && (
+            <span style={{ color: "var(--color-amber)" }}>
+              {Math.round(entry.calories)}c
+            </span>
+          )}
+          {entry.protein_g != null && (
+            <span style={{ color: "var(--color-emerald)" }}>
+              {Math.round(entry.protein_g)}p
+            </span>
+          )}
           <button
-            type="submit"
-            className="text-zinc-700 hover:text-[var(--color-red)]"
-            aria-label={`Delete ${entry.meal}`}
+            type="button"
+            onClick={onToggle}
+            className="text-zinc-700 hover:text-[var(--color-cyan)]"
+            aria-label={expanded ? "Hide analysis" : "Show analysis"}
+            title="AI analysis"
           >
-            <X className="h-3 w-3" aria-hidden />
+            <Sparkles className="h-3 w-3" aria-hidden />
           </button>
-        </form>
+          <form action={deleteMealEntryForm}>
+            <input type="hidden" name="id" value={entry.id} />
+            <button
+              type="submit"
+              className="text-zinc-700 hover:text-[var(--color-red)]"
+              aria-label={`Delete ${entry.meal}`}
+            >
+              <X className="h-3 w-3" aria-hidden />
+            </button>
+          </form>
+        </div>
       </div>
+      {expanded && (
+        <div className="mt-2">
+          <MealAnalysisCard
+            scope="meal"
+            date={entry.date}
+            mealId={entry.id}
+            mealType={entry.meal_type ?? undefined}
+            eatenAt={entry.eaten_at ?? undefined}
+            onDismiss={onToggle}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MealGroup({
+  groupKey,
+  rows,
+  expandedId,
+  onToggleRow,
+}: {
+  groupKey: MealType | "other";
+  rows: DietLogRow[];
+  expandedId: string | null;
+  onToggleRow: (id: string) => void;
+}) {
+  if (rows.length === 0) return null;
+  const totals = rows.reduce(
+    (acc, r) => ({
+      kcal: acc.kcal + (r.calories ?? 0),
+      p: acc.p + (r.protein_g ?? 0),
+    }),
+    { kcal: 0, p: 0 },
+  );
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-[9px] tracking-widest text-zinc-600">
+        <span>{MEAL_GROUP_LABEL[groupKey]}</span>
+        <span>
+          {Math.round(totals.kcal)}c · {Math.round(totals.p)}p
+        </span>
+      </div>
+      {rows.map((r) => (
+        <MealRow
+          key={r.id}
+          entry={r}
+          expanded={expandedId === r.id}
+          onToggle={() => onToggleRow(r.id)}
+        />
+      ))}
     </div>
   );
 }
@@ -134,6 +233,8 @@ export function DietPanel({
   phaseNum: 1 | 2 | 3;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [dayCardOpen, setDayCardOpen] = useState(false);
   const todayISO = new Date().toISOString().slice(0, 10);
 
   const targets = useMemo(
@@ -150,6 +251,31 @@ export function DietPanel({
     () => dietLog.filter((e) => e.date === todayISO),
     [dietLog, todayISO],
   );
+
+  const todayGroups = useMemo(() => {
+    const buckets: Record<MealType | "other", DietLogRow[]> = {
+      breakfast: [],
+      lunch: [],
+      dinner: [],
+      snack: [],
+      other: [],
+    };
+    for (const r of todayLog) {
+      const key: MealType | "other" = r.meal_type ?? "other";
+      buckets[key].push(r);
+    }
+    for (const k of MEAL_GROUP_ORDER) {
+      buckets[k].sort((a, b) => {
+        if (a.eaten_at && b.eaten_at) {
+          return a.eaten_at.localeCompare(b.eaten_at);
+        }
+        if (a.eaten_at) return -1;
+        if (b.eaten_at) return 1;
+        return a.created_at.localeCompare(b.created_at);
+      });
+    }
+    return buckets;
+  }, [todayLog]);
 
   const totals = useMemo(() => {
     return todayLog.reduce(
@@ -217,18 +343,48 @@ export function DietPanel({
           />
 
           <div className="mt-4 border-t border-zinc-900 pt-3">
-            <div className="mb-2 text-[10px] tracking-widest text-zinc-500">
-              TODAY&apos;S MEALS
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-[10px] tracking-widest text-zinc-500">
+                TODAY&apos;S MEALS
+              </div>
+              {todayLog.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setDayCardOpen((v) => !v)}
+                  className="flex items-center gap-1 text-[10px] tracking-widest hover:opacity-80"
+                  style={{ color: "var(--color-cyan)" }}
+                >
+                  <Sparkles className="h-3 w-3" aria-hidden />
+                  {dayCardOpen ? "HIDE DAY READ" : "DAY READ"}
+                </button>
+              )}
             </div>
             {todayLog.length === 0 ? (
               <div className="py-3 text-center text-xs text-zinc-600">
                 Log your first meal.
               </div>
             ) : (
-              <div className="space-y-1">
-                {todayLog.map((e) => (
-                  <MealRow key={e.id} entry={e} />
+              <div className="space-y-3">
+                {MEAL_GROUP_ORDER.map((g) => (
+                  <MealGroup
+                    key={g}
+                    groupKey={g}
+                    rows={todayGroups[g]}
+                    expandedId={expandedRowId}
+                    onToggleRow={(id) =>
+                      setExpandedRowId((prev) => (prev === id ? null : id))
+                    }
+                  />
                 ))}
+              </div>
+            )}
+            {dayCardOpen && todayLog.length > 0 && (
+              <div className="mt-3">
+                <MealAnalysisCard
+                  scope="day"
+                  date={todayISO}
+                  onDismiss={() => setDayCardOpen(false)}
+                />
               </div>
             )}
           </div>
