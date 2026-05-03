@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { generateProgramSeed } from "@/lib/programs/generator";
+import { insertProgramSeed } from "@/lib/programs/insert-seed";
 import type { ProgramAIBrief, ProgramArchetype } from "@/lib/programs/types";
 
 export const runtime = "nodejs";
@@ -115,53 +116,24 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: msg }, { status: 502 });
   }
 
-  const { data: program, error: progErr } = await supabase
-    .from("programs")
-    .insert({
-      owner_user_id: user.id,
-      name: seed.name,
-      slug: seed.slug,
-      description: seed.description ?? null,
-      archetype: seed.archetype,
-      focus_areas: seed.focus_areas,
-      equipment: seed.equipment,
-      weeks: seed.weeks,
-      days_per_week: seed.days_per_week,
-      session_minutes_avg: seed.session_minutes_avg ?? null,
-      source: "ai_generated",
-      ai_brief: brief,
-    })
-    .select()
-    .single();
+  const insertResult = await insertProgramSeed(
+    supabase,
+    user.id,
+    seed,
+    "ai_generated",
+    brief,
+  );
 
-  if (progErr || !program) {
-    return Response.json(
-      { error: progErr?.message ?? "Failed to insert program" },
-      { status: 500 },
-    );
-  }
-
-  const sessionRows = seed.sessions.map((s) => ({
-    program_id: program.id,
-    week: s.week,
-    day_of_week: s.day_of_week,
-    title: s.title ?? null,
-    est_minutes: s.est_minutes ?? null,
-    blocks: s.blocks,
-    notes: s.notes ?? null,
-  }));
-
-  const { error: sessErr } = await supabase
-    .from("program_sessions")
-    .insert(sessionRows);
-
-  if (sessErr) {
-    await supabase.from("programs").delete().eq("id", program.id);
-    return Response.json({ error: sessErr.message }, { status: 500 });
+  if ("error" in insertResult) {
+    return Response.json({ error: insertResult.error }, { status: 500 });
   }
 
   return Response.json(
-    { program, session_count: sessionRows.length, usage },
+    {
+      program: insertResult.program,
+      session_count: insertResult.sessionCount,
+      usage,
+    },
     { status: 201 },
   );
 }
