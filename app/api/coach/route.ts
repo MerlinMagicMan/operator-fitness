@@ -23,6 +23,7 @@ import type {
 import { parseMealText } from "@/lib/food/parse";
 import { logMeals } from "@/app/actions/log-meal";
 import { suggestMealTypeForDate } from "@/lib/food/meal-type";
+import { localDateISO } from "@/lib/date";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,12 +47,8 @@ function isIncomingMessage(v: unknown): v is IncomingMessage {
   );
 }
 
-function isoDaysAgo(days: number): string {
-  return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
-}
-
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+function isoDaysAgo(days: number, timezone?: string | null): string {
+  return localDateISO(timezone, new Date(Date.now() - days * 86_400_000));
 }
 
 const COACH_TOOLS: Anthropic.Tool[] = [
@@ -95,6 +92,7 @@ function isMealType(v: unknown): v is MealType {
 async function runCoachTool(
   name: string,
   input: Record<string, unknown>,
+  timezone: string | null,
 ): Promise<string> {
   if (name !== "log_meal_from_text") {
     return JSON.stringify({ error: `unknown tool ${name}` });
@@ -103,7 +101,7 @@ async function runCoachTool(
   const date =
     typeof input.date === "string" && ISO_DATE_RE.test(input.date)
       ? input.date
-      : todayISO();
+      : localDateISO(timezone);
   if (!text.trim()) return JSON.stringify({ error: "text is required" });
 
   const meal_type: MealType = isMealType(input.meal_type)
@@ -347,7 +345,7 @@ CURRENT STATUS:
 - Today's target: ${today.target}
 - Workouts completed in last ${HISTORY_DAYS} days: ${completedThisWeek}
 - Diet log entries in last ${HISTORY_DAYS} days: ${recentMeals}
-- Today is ${todayISO()}.
+- Today is ${localDateISO(profile?.timezone)} (in ${profile?.timezone ?? "America/Chicago"}).
 
 DAILY MACRO TARGETS (Mifflin-St Jeor on current weight):
 - ${macros.calories} kcal / ${macros.proteinG}g protein / ${macros.carbsG}g carbs / ${macros.fatG}g fat
@@ -530,6 +528,7 @@ export async function POST(request: Request): Promise<Response> {
             const result = await runCoachTool(
               block.name,
               (block.input ?? {}) as Record<string, unknown>,
+              profile?.timezone ?? null,
             );
             toolResults.push({
               type: "tool_result",

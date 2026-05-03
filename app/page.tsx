@@ -35,6 +35,7 @@ import {
 } from "@/components/dashboard/panels/ImportPanel";
 import { ProgramsPanel } from "@/components/dashboard/panels/ProgramsPanel";
 import type { TodayOverlayItem } from "@/components/dashboard/panels/TodayOverlay";
+import { localDateISO } from "@/lib/date";
 
 // Auth-gated; reads the Supabase session per request and pulls the user's
 // dashboard data.
@@ -181,7 +182,9 @@ export default async function Home({
   const email = user.email ?? "—";
 
   // Today's prescription + completion lookup, for the DASH tab.
-  const todayISO = new Date().toISOString().slice(0, 10);
+  // Use the user's local timezone so a 7pm Central dinner doesn't roll
+  // over to "tomorrow" because UTC has already ticked past midnight.
+  const todayISO = localDateISO(profile?.timezone);
   const todayWorkout = getTodayPrescription(phaseInfo);
   const todayCompleted =
     workoutsCompleted.find((w) => w.date === todayISO)?.completed === true;
