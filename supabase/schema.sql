@@ -99,6 +99,8 @@ create table if not exists public.diet_log (
   protein_g   numeric(6,1),
   carbs_g     numeric(6,1),
   fat_g       numeric(6,1),
+  source      text default 'manual' check (source in ('usda','estimate','manual')),
+  fdc_id      text,
   created_at  timestamptz not null default now()
 );
 

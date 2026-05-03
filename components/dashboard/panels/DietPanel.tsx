@@ -10,6 +10,7 @@ import {
 import type { DietLogRow } from "@/lib/operator-types";
 import { PanelHeader } from "../Primitives";
 import { DietLogModal } from "./DietLogModal";
+import { QuickLogMeal } from "./QuickLogMeal";
 import { deleteMealEntryForm } from "@/app/actions/delete-meal-entry";
 
 const MACRO_COLOR: Record<MacroTone, string> = {
@@ -60,10 +61,43 @@ function MacroBar({
   );
 }
 
+function SourceDot({ source }: { source: DietLogRow["source"] }) {
+  if (source === "usda") {
+    return (
+      <span
+        title="Verified against USDA FoodData Central"
+        className="inline-block h-1.5 w-1.5 rounded-full"
+        style={{ backgroundColor: "var(--color-cyan)" }}
+        aria-label="verified"
+      />
+    );
+  }
+  if (source === "estimate") {
+    return (
+      <span
+        title="Estimated by AI"
+        className="inline-block h-1.5 w-1.5 rounded-full"
+        style={{ backgroundColor: "var(--color-amber)" }}
+        aria-label="estimate"
+      />
+    );
+  }
+  return (
+    <span
+      title="Manual entry"
+      className="inline-block h-1.5 w-1.5 rounded-full bg-zinc-700"
+      aria-label="manual"
+    />
+  );
+}
+
 function MealRow({ entry }: { entry: DietLogRow }) {
   return (
     <div className="flex items-center justify-between border-b border-zinc-900 pb-1 text-xs">
-      <span className="flex-1 truncate text-zinc-300">{entry.meal}</span>
+      <span className="flex flex-1 items-center gap-1.5 truncate text-zinc-300">
+        <SourceDot source={entry.source} />
+        <span className="truncate">{entry.meal}</span>
+      </span>
       <div className="flex flex-shrink-0 items-center gap-2">
         {entry.calories != null && (
           <span style={{ color: "var(--color-amber)" }}>
@@ -147,9 +181,11 @@ export function DietPanel({
               className="flex items-center gap-1 text-[10px] tracking-widest hover:opacity-80"
               style={{ color: "var(--color-amber)" }}
             >
-              <Plus className="h-3 w-3" aria-hidden /> ADD MEAL
+              <Plus className="h-3 w-3" aria-hidden /> MANUAL
             </button>
           </div>
+
+          <QuickLogMeal date={todayISO} />
 
           <MacroBar
             label="CALORIES"

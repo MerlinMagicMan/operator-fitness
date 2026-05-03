@@ -1,9 +1,12 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { logMeal } from "@/app/actions/log-meal";
 import type { ActionResult } from "@/lib/operator-types";
+import { QuickLogMeal } from "./QuickLogMeal";
+
+type Tab = "describe" | "manual";
 
 function FieldRow({
   label,
@@ -46,6 +49,7 @@ export function DietLogModal({
   onClose: () => void;
   defaultDate: string;
 }) {
+  const [tab, setTab] = useState<Tab>("manual");
   const [state, formAction, pending] = useActionState<
     ActionResult | null,
     FormData
@@ -54,6 +58,10 @@ export function DietLogModal({
   useEffect(() => {
     if (state && "success" in state) onClose();
   }, [state, onClose]);
+
+  useEffect(() => {
+    if (open) setTab("manual");
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -95,72 +103,115 @@ export function DietLogModal({
           </button>
         </div>
 
-        <form action={formAction} className="space-y-3">
-          <input type="hidden" name="date" value={defaultDate} />
-          <FieldRow
-            label="MEAL / FOOD"
-            name="meal"
-            placeholder="e.g. 6oz chicken + rice + veg"
-            required
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <FieldRow
-              label="CALORIES"
-              name="calories"
-              type="number"
-              placeholder="kcal"
-            />
-            <FieldRow
-              label="PROTEIN (g)"
-              name="protein_g"
-              type="number"
-              step="0.1"
-            />
-            <FieldRow
-              label="CARBS (g)"
-              name="carbs_g"
-              type="number"
-              step="0.1"
-            />
-            <FieldRow label="FAT (g)" name="fat_g" type="number" step="0.1" />
-          </div>
+        <div className="flex gap-1 text-[10px] tracking-widest">
+          <button
+            type="button"
+            onClick={() => setTab("describe")}
+            className="flex-1 border py-1.5"
+            style={{
+              color:
+                tab === "describe"
+                  ? "var(--color-amber)"
+                  : "var(--color-zinc-500, #71717a)",
+              borderColor:
+                tab === "describe"
+                  ? "var(--color-amber)"
+                  : "var(--color-zinc-800, #27272a)",
+            }}
+          >
+            DESCRIBE
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("manual")}
+            className="flex-1 border py-1.5"
+            style={{
+              color:
+                tab === "manual"
+                  ? "var(--color-amber)"
+                  : "var(--color-zinc-500, #71717a)",
+              borderColor:
+                tab === "manual"
+                  ? "var(--color-amber)"
+                  : "var(--color-zinc-800, #27272a)",
+            }}
+          >
+            MANUAL
+          </button>
+        </div>
 
-          {errorMsg && (
-            <div
-              className="border px-2 py-1.5 text-[11px]"
-              style={{
-                backgroundColor:
-                  "color-mix(in oklab, var(--color-red) 10%, transparent)",
-                borderColor:
-                  "color-mix(in oklab, var(--color-red) 30%, transparent)",
-                color: "var(--color-red)",
-              }}
-            >
-              {errorMsg}
+        {tab === "describe" && (
+          <QuickLogMeal date={defaultDate} onAfterSave={onClose} />
+        )}
+
+        {tab === "manual" && (
+          <form action={formAction} className="space-y-3">
+            <input type="hidden" name="date" value={defaultDate} />
+            <FieldRow
+              label="MEAL / FOOD"
+              name="meal"
+              placeholder="e.g. 6oz chicken + rice + veg"
+              required
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <FieldRow
+                label="CALORIES"
+                name="calories"
+                type="number"
+                placeholder="kcal"
+              />
+              <FieldRow
+                label="PROTEIN (g)"
+                name="protein_g"
+                type="number"
+                step="0.1"
+              />
+              <FieldRow
+                label="CARBS (g)"
+                name="carbs_g"
+                type="number"
+                step="0.1"
+              />
+              <FieldRow label="FAT (g)" name="fat_g" type="number" step="0.1" />
             </div>
-          )}
 
-          <div className="flex gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 border border-zinc-700 py-2 text-xs tracking-widest text-zinc-400 hover:text-zinc-200"
-            >
-              CANCEL
-            </button>
-            <button
-              type="submit"
-              disabled={pending}
-              className="flex-1 border py-2 text-xs tracking-widest disabled:opacity-50"
-              style={{
-                borderColor: "var(--color-amber)",
-                color: "var(--color-amber)",
-              }}
-            >
-              {pending ? "SAVING…" : "SAVE"}
-            </button>
-          </div>
-        </form>
+            {errorMsg && (
+              <div
+                className="border px-2 py-1.5 text-[11px]"
+                style={{
+                  backgroundColor:
+                    "color-mix(in oklab, var(--color-red) 10%, transparent)",
+                  borderColor:
+                    "color-mix(in oklab, var(--color-red) 30%, transparent)",
+                  color: "var(--color-red)",
+                }}
+              >
+                {errorMsg}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 border border-zinc-700 py-2 text-xs tracking-widest text-zinc-400 hover:text-zinc-200"
+              >
+                CANCEL
+              </button>
+              <button
+                type="submit"
+                disabled={pending}
+                className="flex-1 border py-2 text-xs tracking-widest disabled:opacity-50"
+                style={{
+                  borderColor: "var(--color-amber)",
+                  color: "var(--color-amber)",
+                }}
+              >
+                {pending ? "SAVING…" : "SAVE"}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

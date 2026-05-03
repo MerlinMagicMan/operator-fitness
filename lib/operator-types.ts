@@ -42,6 +42,8 @@ export type WorkoutCompletedRow = {
   updated_at: string;
 };
 
+export type MealSource = "usda" | "estimate" | "manual";
+
 export type DietLogRow = {
   id: string;
   user_id: string;
@@ -51,7 +53,34 @@ export type DietLogRow = {
   protein_g: number | null;
   carbs_g: number | null;
   fat_g: number | null;
+  source: MealSource | null;
+  fdc_id: string | null;
   created_at: string;
+};
+
+/** One row returned by the parse pipeline (Claude + USDA tool-use). */
+export type ParsedMealItem = {
+  name: string;
+  qty_text: string;
+  grams: number | null;
+  kcal: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  source: MealSource;
+  fdc_id: string | null;
+};
+
+/** Input shape for inserting one diet_log row programmatically. */
+export type MealInput = {
+  date: string;
+  meal: string;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  source: MealSource;
+  fdc_id: string | null;
 };
 
 export type ActivityRow = {
