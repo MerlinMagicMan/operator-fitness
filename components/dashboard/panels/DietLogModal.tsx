@@ -3,7 +3,14 @@
 import { useActionState, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { logMeal } from "@/app/actions/log-meal";
-import type { ActionResult } from "@/lib/operator-types";
+import type { ActionResult, MealType } from "@/lib/operator-types";
+import {
+  MEAL_TYPES,
+  MEAL_TYPE_LABEL,
+  combineDateAndTime,
+  localTimeHHMM,
+  suggestMealTypeForDate,
+} from "@/lib/food/meal-type";
 import { QuickLogMeal } from "./QuickLogMeal";
 
 type Tab = "describe" | "manual";
@@ -50,6 +57,10 @@ export function DietLogModal({
   defaultDate: string;
 }) {
   const [tab, setTab] = useState<Tab>("manual");
+  const [mealType, setMealType] = useState<MealType>(() =>
+    suggestMealTypeForDate(),
+  );
+  const [time, setTime] = useState<string>(() => localTimeHHMM());
   const [state, formAction, pending] = useActionState<
     ActionResult | null,
     FormData
@@ -60,7 +71,11 @@ export function DietLogModal({
   }, [state, onClose]);
 
   useEffect(() => {
-    if (open) setTab("manual");
+    if (open) {
+      setTab("manual");
+      setMealType(suggestMealTypeForDate());
+      setTime(localTimeHHMM());
+    }
   }, [open]);
 
   useEffect(() => {
@@ -147,6 +162,57 @@ export function DietLogModal({
         {tab === "manual" && (
           <form action={formAction} className="space-y-3">
             <input type="hidden" name="date" value={defaultDate} />
+            <input type="hidden" name="meal_type" value={mealType} />
+            <input
+              type="hidden"
+              name="eaten_at"
+              value={combineDateAndTime(defaultDate, time) ?? ""}
+            />
+
+            <div>
+              <span className="mb-1 block text-[10px] tracking-widest text-zinc-500">
+                MEAL
+              </span>
+              <div className="flex gap-1">
+                {MEAL_TYPES.map((t) => {
+                  const active = mealType === t;
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setMealType(t)}
+                      className="flex-1 border px-2 py-1 text-[9px] font-bold tracking-widest"
+                      style={{
+                        color: active
+                          ? "var(--color-amber)"
+                          : "var(--color-zinc-500, #71717a)",
+                        borderColor: active
+                          ? "var(--color-amber)"
+                          : "var(--color-zinc-800, #27272a)",
+                        backgroundColor: active
+                          ? "color-mix(in oklab, var(--color-amber) 8%, transparent)"
+                          : "transparent",
+                      }}
+                    >
+                      {MEAL_TYPE_LABEL[t]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <label className="block">
+              <span className="mb-1 block text-[10px] tracking-widest text-zinc-500">
+                TIME
+              </span>
+              <input
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                className="w-full border border-zinc-800 bg-black px-2 py-1.5 text-xs text-zinc-100 focus:border-[var(--color-amber)] focus:outline-none"
+              />
+            </label>
+
             <FieldRow
               label="MEAL / FOOD"
               name="meal"

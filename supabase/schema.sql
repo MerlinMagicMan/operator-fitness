@@ -101,6 +101,8 @@ create table if not exists public.diet_log (
   fat_g       numeric(6,1),
   source      text default 'manual' check (source in ('usda','estimate','manual')),
   fdc_id      text,
+  meal_type   text check (meal_type in ('breakfast','lunch','dinner','snack')),
+  eaten_at    timestamptz,
   created_at  timestamptz not null default now()
 );
 

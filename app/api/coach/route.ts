@@ -12,11 +12,13 @@ import type {
   BodyMetricRow,
   DietLogRow,
   MealInput,
+  MealType,
   ProfileRow,
   WorkoutCompletedRow,
 } from "@/lib/operator-types";
 import { parseMealText } from "@/lib/food/parse";
 import { logMeals } from "@/app/actions/log-meal";
+import { suggestMealTypeForDate } from "@/lib/food/meal-type";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,11 +67,26 @@ const COACH_TOOLS: Anthropic.Tool[] = [
           description:
             "Date in YYYY-MM-DD. Defaults to today if omitted. Use a past date only if the user explicitly says so.",
         },
+        meal_type: {
+          type: "string",
+          enum: ["breakfast", "lunch", "dinner", "snack"],
+          description:
+            "Which slot of the day. Infer from the user's wording ('my breakfast' → breakfast); fall back to time-of-day if unclear.",
+        },
+        eaten_at: {
+          type: "string",
+          description:
+            "ISO 8601 timestamp of when the meal was eaten, e.g. '2026-05-03T08:30:00-05:00'. Omit to use the current server time.",
+        },
       },
       required: ["text"],
     },
   },
 ];
+
+function isMealType(v: unknown): v is MealType {
+  return v === "breakfast" || v === "lunch" || v === "dinner" || v === "snack";
+}
 
 async function runCoachTool(
   name: string,
@@ -85,6 +102,18 @@ async function runCoachTool(
       : todayISO();
   if (!text.trim()) return JSON.stringify({ error: "text is required" });
 
+  const meal_type: MealType = isMealType(input.meal_type)
+    ? input.meal_type
+    : suggestMealTypeForDate();
+
+  let eaten_at: string | null;
+  if (typeof input.eaten_at === "string") {
+    const parsed = Date.parse(input.eaten_at);
+    eaten_at = Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  } else {
+    eaten_at = new Date().toISOString();
+  }
+
   try {
     const items = await parseMealText(text);
     if (items.length === 0) {
@@ -99,6 +128,8 @@ async function runCoachTool(
       fat_g: it.fat_g,
       source: it.source,
       fdc_id: it.fdc_id,
+      meal_type,
+      eaten_at,
     }));
     const result = await logMeals(payload);
     if ("error" in result) {
@@ -107,6 +138,8 @@ async function runCoachTool(
     return JSON.stringify({
       logged: result.count ?? items.length,
       date,
+      meal_type,
+      eaten_at,
       items: items.map((it) => ({
         name: it.name,
         qty_text: it.qty_text,
