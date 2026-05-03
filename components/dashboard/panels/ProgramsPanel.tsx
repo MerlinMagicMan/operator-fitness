@@ -1,9 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Sparkles, Trash2, Play, BookOpen, CalendarRange } from "lucide-react";
+import {
+  Sparkles,
+  Trash2,
+  Play,
+  BookOpen,
+  CalendarRange,
+  FileUp,
+} from "lucide-react";
 import { PanelHeader } from "../Primitives";
 import { GenerateProgramModal } from "./programs/GenerateProgramModal";
+import { ImportProgramModal } from "./programs/ImportProgramModal";
 import { SessionViewModal } from "./programs/SessionViewModal";
 import { enrollProgram } from "@/app/actions/enroll-program";
 import { unenrollProgram } from "@/app/actions/unenroll-program";
@@ -45,6 +53,7 @@ export function ProgramsPanel({
   completions: SessionCompletionRow[];
 }) {
   const [genOpen, setGenOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [selected, setSelected] = useState<SelectedSession | null>(null);
 
   const sessionsByProgram = useMemo(() => {
@@ -101,22 +110,37 @@ export function ProgramsPanel({
               PROGRAM LIBRARY
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() => setGenOpen(true)}
-            className="flex items-center gap-1 border px-3 py-1 text-[10px] tracking-widest"
-            style={{
-              borderColor: "var(--color-amber)",
-              color: "var(--color-amber)",
-            }}
-          >
-            <Sparkles className="h-3 w-3" aria-hidden />
-            GENERATE
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setImportOpen(true)}
+              className="flex items-center gap-1 border px-3 py-1 text-[10px] tracking-widest"
+              style={{
+                borderColor: "var(--color-cyan)",
+                color: "var(--color-cyan)",
+              }}
+            >
+              <FileUp className="h-3 w-3" aria-hidden />
+              IMPORT PDF
+            </button>
+            <button
+              type="button"
+              onClick={() => setGenOpen(true)}
+              className="flex items-center gap-1 border px-3 py-1 text-[10px] tracking-widest"
+              style={{
+                borderColor: "var(--color-amber)",
+                color: "var(--color-amber)",
+              }}
+            >
+              <Sparkles className="h-3 w-3" aria-hidden />
+              GENERATE
+            </button>
+          </div>
         </div>
         {libraryPrograms.length === 0 ? (
           <p className="py-6 text-center text-[11px] text-zinc-500">
-            No programs in library. Click GENERATE to draft your first one.
+            No programs in library. GENERATE one with the Coach or IMPORT a PDF
+            you own.
           </p>
         ) : (
           <ul className="space-y-2">
@@ -175,6 +199,10 @@ export function ProgramsPanel({
       </section>
 
       <GenerateProgramModal open={genOpen} onClose={() => setGenOpen(false)} />
+      <ImportProgramModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+      />
       <SessionViewModal
         open={selected !== null}
         onClose={() => setSelected(null)}
