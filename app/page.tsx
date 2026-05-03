@@ -34,6 +34,7 @@ import {
   type StravaConnection,
 } from "@/components/dashboard/panels/ImportPanel";
 import { ProgramsPanel } from "@/components/dashboard/panels/ProgramsPanel";
+import type { TodayOverlayItem } from "@/components/dashboard/panels/TodayOverlay";
 
 // Auth-gated; reads the Supabase session per request and pulls the user's
 // dashboard data.
@@ -185,6 +186,40 @@ export default async function Home({
   const todayCompleted =
     workoutsCompleted.find((w) => w.date === todayISO)?.completed === true;
 
+  // Today's day-of-week as 1=Monday ... 7=Sunday (matches program_sessions).
+  const jsDay = new Date().getDay();
+  const todayDayOfWeek = ((jsDay + 6) % 7) + 1;
+
+  // For each active enrollment, find the session at (current_week, today)
+  // and pair with any existing completion. Drives the TodayCard overlay.
+  const activeEnrollments = enrollments.filter((e) => e.status === "active");
+  const todayOverlays: TodayOverlayItem[] = activeEnrollments
+    .map((enrollment) => {
+      const program = programs.find((p) => p.id === enrollment.program_id);
+      if (!program) return null;
+      const session = programSessions.find(
+        (s) =>
+          s.program_id === program.id &&
+          s.week === enrollment.current_week &&
+          s.day_of_week === todayDayOfWeek,
+      );
+      if (!session) return null;
+      const completion =
+        sessionCompletions.find(
+          (c) =>
+            c.enrollment_id === enrollment.id &&
+            c.week === session.week &&
+            c.day_of_week === session.day_of_week,
+        ) ?? null;
+      return {
+        enrollmentId: enrollment.id,
+        programName: program.name,
+        session,
+        completion,
+      };
+    })
+    .filter((item): item is TodayOverlayItem => item !== null);
+
   // Strava connection state for the IMPORT tab.
   const lastStravaSync =
     activities.find((a) => a.source === "strava")?.created_at ?? null;
@@ -208,6 +243,7 @@ export default async function Home({
         phaseColor={phaseInfo.phase.color}
         bodyMetrics={bodyMetrics}
         targetWeightLb={goalWeightLb}
+        overlays={todayOverlays}
       />
     ),
     weekly: (

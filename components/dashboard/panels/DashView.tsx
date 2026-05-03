@@ -6,6 +6,7 @@ import {
 import type { BodyMetricRow } from "@/lib/operator-types";
 import { PanelHeader } from "../Primitives";
 import { TodayCard } from "./TodayCard";
+import type { TodayOverlayItem } from "./TodayOverlay";
 import { MetricsPanel } from "./MetricsPanel";
 import { DashCoachPanel } from "../coach/DashCoachPanel";
 
@@ -17,6 +18,7 @@ export function DashView({
   phaseColor,
   bodyMetrics,
   targetWeightLb,
+  overlays = [],
 }: {
   workout: DayPrescription;
   completed: boolean;
@@ -24,6 +26,7 @@ export function DashView({
   phaseColor: PhaseColor;
   bodyMetrics: BodyMetricRow[];
   targetWeightLb: number;
+  overlays?: TodayOverlayItem[];
 }) {
   return (
     <div className="grid grid-cols-1 gap-px bg-zinc-900 lg:grid-cols-12">
@@ -34,6 +37,7 @@ export function DashView({
           completed={completed}
           todayISO={todayISO}
           phaseColor={phaseColor}
+          overlays={overlays}
         />
       </section>
       <section className="bg-black p-4 lg:col-span-3">
