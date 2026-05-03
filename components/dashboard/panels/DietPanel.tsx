@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Apple, ChevronRight, Plus, Sparkles, X } from "lucide-react";
+import { localDateISO } from "@/lib/date";
 import {
   DIET_GUIDANCE,
   USER_DEFAULTS,
@@ -235,7 +236,7 @@ export function DietPanel({
   const [modalOpen, setModalOpen] = useState(false);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [dayCardOpen, setDayCardOpen] = useState(false);
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = localDateISO();
 
   const targets = useMemo(
     () =>

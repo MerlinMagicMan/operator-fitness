@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Send, Sparkles, X } from "lucide-react";
+import { localDateISO } from "@/lib/date";
 import type { MealType, ParsedMealItem } from "@/lib/operator-types";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -40,7 +41,7 @@ export function MealAnalysisCard({
   const initialFetchDone = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  const dateISO = date ?? new Date().toISOString().slice(0, 10);
+  const dateISO = date ?? localDateISO();
 
   const send = async (history: ChatMessage[]) => {
     setStreaming(true);

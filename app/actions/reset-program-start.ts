@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { localDateISO } from "@/lib/date";
 import type { ActionResult } from "@/lib/operator-types";
 
 /**
@@ -16,7 +17,14 @@ export async function resetProgramStart(): Promise<ActionResult> {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
-  const today = new Date().toISOString().slice(0, 10);
+  const { data: profile } = await supabase
+    .from("profile")
+    .select("timezone")
+    .eq("id", user.id)
+    .maybeSingle();
+  const today = localDateISO(
+    (profile as { timezone: string | null } | null)?.timezone ?? null,
+  );
   // Upsert (not update) so brand-new accounts whose profile row hasn't
   // been materialized yet by the on-auth trigger still get a row with
   // program_start_date set. PostgREST upsert only writes the columns
