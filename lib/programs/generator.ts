@@ -3,7 +3,10 @@ import { PROGRAM_STYLE_SYSTEM_PROMPT } from "./style-profile";
 import type { ProgramAIBrief, ProgramArchetype, ProgramSeed } from "./types";
 
 const MODEL = "claude-opus-4-7";
-const MAX_TOKENS = 32000;
+// Opus 4.7 supports up to 128K output tokens when streaming. We stream
+// via messages.stream() below, so use the higher ceiling — long programs
+// can otherwise truncate before all sessions are emitted.
+const MAX_TOKENS = 96000;
 
 const ARCHETYPES: readonly ProgramArchetype[] = [
   "bodyweight_mobility",
