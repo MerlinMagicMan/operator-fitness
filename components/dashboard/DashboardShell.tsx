@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   Apple,
   CalendarDays,
+  Dumbbell,
   LayoutDashboard,
   MessageSquare,
   Pill,
@@ -16,7 +17,13 @@ import { StubPanel } from "./StubPanel";
 import { ChatProvider } from "./coach/ChatContext";
 import { CoachDrawer } from "./coach/CoachDrawer";
 
-export type TabId = "dash" | "weekly" | "diet" | "peptides" | "import";
+export type TabId =
+  | "dash"
+  | "weekly"
+  | "diet"
+  | "peptides"
+  | "import"
+  | "programs";
 
 /** Server-rendered slot content per tab. Tabs without a slot fall back
  *  to the stub placeholder. */
@@ -28,6 +35,7 @@ const TABS: ReadonlyArray<{ id: TabId; label: string; icon: LucideIcon }> = [
   { id: "diet", label: "F3 DIET", icon: Apple },
   { id: "peptides", label: "F4 PEP", icon: Pill },
   { id: "import", label: "F5 IMPORT", icon: Upload },
+  { id: "programs", label: "F6 PROG", icon: Dumbbell },
 ];
 
 const STUB_BY_TAB: Record<
@@ -58,6 +66,11 @@ const STUB_BY_TAB: Record<
     label: "ACTIVITY IMPORT",
     icon: Upload,
     message: "Activity import unavailable.",
+  },
+  programs: {
+    label: "PROGRAMS",
+    icon: Dumbbell,
+    message: "Programs unavailable.",
   },
 };
 

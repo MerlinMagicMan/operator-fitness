@@ -13,6 +13,10 @@ import type {
   DietLogRow,
   OAuthTokenRow,
   ProfileRow,
+  ProgramEnrollmentRow,
+  ProgramRow,
+  ProgramSessionRow,
+  SessionCompletionRow,
   WorkoutCompletedRow,
 } from "@/lib/operator-types";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
@@ -29,6 +33,7 @@ import {
   ImportPanel,
   type StravaConnection,
 } from "@/components/dashboard/panels/ImportPanel";
+import { ProgramsPanel } from "@/components/dashboard/panels/ProgramsPanel";
 
 // Auth-gated; reads the Supabase session per request and pulls the user's
 // dashboard data.
@@ -86,6 +91,10 @@ export default async function Home({
     activitiesRes,
     dietRes,
     stravaTokenRes,
+    programsRes,
+    enrollmentsRes,
+    sessionsRes,
+    completionsRes,
   ] = await Promise.all([
     supabase.from("profile").select("*").eq("id", user.id).maybeSingle(),
     supabase
@@ -118,6 +127,18 @@ export default async function Home({
       .eq("user_id", user.id)
       .eq("provider", "strava")
       .maybeSingle(),
+    supabase
+      .from("programs")
+      .select("*")
+      .eq("owner_user_id", user.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("program_enrollments")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("started_on", { ascending: false }),
+    supabase.from("program_sessions").select("*"),
+    supabase.from("session_completions").select("*"),
   ]);
 
   const profile = (profileRes.data as ProfileRow | null) ?? null;
@@ -127,6 +148,13 @@ export default async function Home({
   const activities = (activitiesRes.data as ActivityRow[] | null) ?? [];
   const dietLog = (dietRes.data as DietLogRow[] | null) ?? [];
   const stravaToken = (stravaTokenRes.data as OAuthTokenRow | null) ?? null;
+  const programs = (programsRes.data as ProgramRow[] | null) ?? [];
+  const enrollments =
+    (enrollmentsRes.data as ProgramEnrollmentRow[] | null) ?? [];
+  const programSessions =
+    (sessionsRes.data as ProgramSessionRow[] | null) ?? [];
+  const sessionCompletions =
+    (completionsRes.data as SessionCompletionRow[] | null) ?? [];
 
   // Program anchor date: prefer the explicit program_start_date (set
   // via the RESET START button), fall back to profile.created_at, fall
@@ -203,6 +231,14 @@ export default async function Home({
         activities={activities}
         strava={stravaConnection}
         flash={importFlash}
+      />
+    ),
+    programs: (
+      <ProgramsPanel
+        programs={programs}
+        enrollments={enrollments}
+        sessions={programSessions}
+        completions={sessionCompletions}
       />
     ),
   };
