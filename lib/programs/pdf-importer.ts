@@ -2,7 +2,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { ProgramArchetype, ProgramSeed } from "./types";
 
 const MODEL = "claude-opus-4-7";
-const MAX_TOKENS = 32000;
+// Opus 4.7 supports up to 128K output tokens when streaming. We stream
+// via messages.stream() below, so use the higher ceiling — long programs
+// (8wk x 5d, ~40 sessions x 10 movements) can otherwise truncate.
+const MAX_TOKENS = 96000;
 const MAX_PDF_BYTES = 32 * 1024 * 1024;
 
 const ARCHETYPES: readonly ProgramArchetype[] = [
