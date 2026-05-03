@@ -88,3 +88,19 @@ export type OAuthTokenRow = {
 };
 
 export type ActionResult = { success: true } | { error: string };
+
+export type {
+  ProgramArchetype,
+  ProgramSource,
+  EnrollmentStatus,
+  BlockType,
+  BlockItem,
+  SessionBlock,
+  ProgramRow,
+  ProgramSessionRow,
+  ProgramEnrollmentRow,
+  SessionCompletionRow,
+  ProgramAIBrief,
+  ProgramSeed,
+  ProgramSeedSession,
+} from "./programs/types";
