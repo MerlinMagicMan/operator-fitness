@@ -1,0 +1,76 @@
+{
+  "slug": "template-example",
+  "name": "Template — example program",
+  "description": "Reference seed file showing the JSON shape the loader expects. Not a real program; safe to delete. Copy this file, rename, and fill in real sessions for programs you've purchased and are entitled to use personally, or use the Coach generator to emit programs in this same shape.",
+  "archetype": "custom",
+  "focus_areas": ["hips", "shoulders", "t-spine", "ankles"],
+  "equipment": ["bands", "kettlebell"],
+  "weeks": 6,
+  "days_per_week": 4,
+  "session_minutes_avg": 25,
+  "source": "manual",
+  "sessions": [
+    {
+      "week": 1,
+      "day_of_week": 1,
+      "title": "Week 1 / Day 1 — example session title",
+      "est_minutes": 25,
+      "blocks": [
+        {
+          "label": "A",
+          "type": "warmup",
+          "name": "General prep",
+          "items": [
+            {
+              "name": "Cat / cow",
+              "sets": 1,
+              "reps": 8,
+              "tempo": "slow",
+              "notes": "free the spine before loading"
+            },
+            {
+              "name": "World's greatest stretch",
+              "sets": 1,
+              "reps": 5,
+              "notes": "each side"
+            }
+          ]
+        },
+        {
+          "label": "B",
+          "type": "mobility",
+          "name": "Hip primary",
+          "items": [
+            {
+              "name": "90/90 hip switch",
+              "sets": 3,
+              "reps": 6,
+              "tempo": "3-1-3",
+              "notes": "controlled, breathe through the switch"
+            },
+            {
+              "name": "Cossack squat",
+              "sets": 3,
+              "reps": 5,
+              "load": "BW",
+              "notes": "each side"
+            }
+          ]
+        },
+        {
+          "label": "C",
+          "type": "cooldown",
+          "name": "Reset",
+          "items": [
+            {
+              "name": "Box breathing",
+              "sets": 1,
+              "duration_s": 180,
+              "notes": "4-4-4-4"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
