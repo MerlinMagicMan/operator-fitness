@@ -5,6 +5,12 @@ type CookieSet = { name: string; value: string; options?: CookieOptions };
 
 const PUBLIC_PREFIXES = ["/login", "/auth"];
 
+// Bail out of session validation if Supabase doesn't answer in this window.
+// Vercel kills middleware around 25s and surfaces a 504
+// MIDDLEWARE_INVOCATION_TIMEOUT; we surrender well before that so the page
+// can render and surface its own auth state instead.
+const AUTH_TIMEOUT_MS = 3000;
+
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
@@ -48,9 +54,28 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"] =
+    null;
+  try {
+    const result = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<null>((resolve) => {
+        timeoutHandle = setTimeout(() => resolve(null), AUTH_TIMEOUT_MS);
+      }),
+    ]);
+    if (result === null) {
+      // Supabase didn't answer in time. Fail open so the page can render and
+      // its server components can re-attempt the auth check.
+      return supabaseResponse;
+    }
+    user = result.data.user;
+  } catch {
+    // Network/auth error — same story, let the page handle it.
+    return supabaseResponse;
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
 
   const pathname = request.nextUrl.pathname;
   const isPublic = isPublicPath(pathname);
