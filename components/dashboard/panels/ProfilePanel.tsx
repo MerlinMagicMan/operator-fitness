@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
-import { Check, Save, User } from "lucide-react";
+import { useActionState, useEffect, useMemo, useState } from "react";
+import { Check, MessageSquare, Save, User } from "lucide-react";
 import type { ActionResult, ProfileRow } from "@/lib/operator-types";
 import { USER_DEFAULTS } from "@/lib/operator-constants";
 import { updateProfileForm } from "@/app/actions/update-profile";
 import { PanelHeader } from "../Primitives";
+import { CoachUI } from "../coach/CoachUI";
 
 type FieldProps = {
   label: string;
@@ -86,176 +87,216 @@ export function ProfilePanel({ profile }: { profile: ProfileRow | null }) {
   const proteinPlaceholder = "1.00";
   const fatPlaceholder = "0.27";
 
+  // Remount the form whenever the server-provided profile changes so the
+  // defaults re-sync after the coach writes via `update_profile`. Without
+  // this, uncontrolled inputs keep their initial defaultValues forever.
+  const formKey = useMemo(
+    () =>
+      [
+        profile?.updated_at,
+        profile?.diet_style,
+        profile?.protein_g_per_lb,
+        profile?.fat_pct_of_calories,
+        profile?.net_carbs_max_g,
+        profile?.cut_deficit_kcal,
+        profile?.age_years,
+        profile?.height_inches,
+        profile?.activity_multiplier,
+        profile?.start_weight_lb,
+        profile?.weight_goal_lb,
+        profile?.bf_goal_pct,
+        profile?.diet_notes,
+        profile?.goals_notes,
+        profile?.display_name,
+        profile?.timezone,
+      ].join("|"),
+    [profile],
+  );
+
   return (
-    <div className="space-y-4 p-4">
-      <PanelHeader icon={User} label="PROFILE & SETTINGS" />
+    <div className="grid min-h-0 grid-cols-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="space-y-4">
+        <PanelHeader icon={User} label="PROFILE & SETTINGS" />
 
-      <p className="text-xs text-zinc-500">
-        Edit anything here, or ask the coach in chat (e.g. &ldquo;switch me to
-        keto, 25g net carbs max&rdquo;) and they&rsquo;ll write it for you.
-      </p>
+        <p className="text-xs text-zinc-500">
+          Edit anything here, or ask the coach on the right (e.g. &ldquo;switch
+          me to keto, 25g net carbs max&rdquo;) and they&rsquo;ll write it for
+          you.
+        </p>
 
-      <form action={action} className="space-y-4">
-        <Section title="IDENTITY">
-          <Field
-            label="DISPLAY NAME"
-            name="display_name"
-            defaultValue={profile?.display_name ?? ""}
-            placeholder="Joe"
-          />
-          <Field
-            label="TIMEZONE"
-            name="timezone"
-            hint="IANA, e.g. America/Chicago"
-            defaultValue={profile?.timezone ?? ""}
-            placeholder="America/Chicago"
-          />
-          <Field
-            label="AGE (years)"
-            name="age_years"
-            type="number"
-            step="1"
-            defaultValue={profile?.age_years ?? ""}
-            placeholder={String(USER_DEFAULTS.ageYears)}
-          />
-          <Field
-            label="HEIGHT (inches)"
-            name="height_inches"
-            type="number"
-            step="0.25"
-            defaultValue={profile?.height_inches ?? ""}
-            placeholder={String(USER_DEFAULTS.heightInches)}
-          />
-        </Section>
-
-        <Section title="GOALS">
-          <Field
-            label="START WEIGHT (lb)"
-            name="start_weight_lb"
-            type="number"
-            step="0.1"
-            defaultValue={profile?.start_weight_lb ?? ""}
-            placeholder={String(USER_DEFAULTS.startWeightLb)}
-          />
-          <Field
-            label="GOAL WEIGHT (lb)"
-            name="weight_goal_lb"
-            type="number"
-            step="0.1"
-            defaultValue={profile?.weight_goal_lb ?? ""}
-            placeholder={String(USER_DEFAULTS.goalWeightLb)}
-          />
-          <Field
-            label="BODY FAT GOAL (%)"
-            name="bf_goal_pct"
-            type="number"
-            step="0.1"
-            defaultValue={profile?.bf_goal_pct ?? ""}
-            placeholder="12"
-          />
-          <Field
-            label="ACTIVITY MULTIPLIER"
-            name="activity_multiplier"
-            hint="1.2 sedentary → 1.9 athlete"
-            type="number"
-            step="0.05"
-            defaultValue={profile?.activity_multiplier ?? ""}
-            placeholder={String(USER_DEFAULTS.activityMultiplier)}
-          />
-          <div className="sm:col-span-2">
+        <form key={formKey} action={action} className="space-y-4">
+          <Section title="IDENTITY">
             <Field
-              label="GOAL NOTES"
-              name="goals_notes"
-              type="textarea"
-              defaultValue={profile?.goals_notes ?? ""}
-              placeholder="What are you chasing? Sub-7 mile, drop to 230, etc."
+              label="DISPLAY NAME"
+              name="display_name"
+              defaultValue={profile?.display_name ?? ""}
+              placeholder="Joe"
             />
-          </div>
-        </Section>
-
-        <Section title="DIET & MACROS">
-          <Field
-            label="DIET STYLE"
-            name="diet_style"
-            hint="free text — keto / standard / low-carb"
-            defaultValue={profile?.diet_style ?? ""}
-            placeholder="keto"
-          />
-          <Field
-            label="CUT DEFICIT (kcal/day)"
-            name="cut_deficit_kcal"
-            hint="negative = surplus"
-            type="number"
-            step="50"
-            defaultValue={profile?.cut_deficit_kcal ?? ""}
-            placeholder={String(USER_DEFAULTS.cutDeficitKcal)}
-          />
-          <Field
-            label="PROTEIN g/lb BODYWEIGHT"
-            name="protein_g_per_lb"
-            type="number"
-            step="0.05"
-            defaultValue={profile?.protein_g_per_lb ?? ""}
-            placeholder={proteinPlaceholder}
-          />
-          <Field
-            label="FAT % OF CALORIES"
-            name="fat_pct_of_calories"
-            hint="0.27 = 27%"
-            type="number"
-            step="0.01"
-            defaultValue={profile?.fat_pct_of_calories ?? ""}
-            placeholder={fatPlaceholder}
-          />
-          <Field
-            label="NET CARB CAP (g/day)"
-            name="net_carbs_max_g"
-            hint="set this for keto / low-carb"
-            type="number"
-            step="1"
-            defaultValue={profile?.net_carbs_max_g ?? ""}
-            placeholder="25"
-          />
-          <div className="sm:col-span-2">
             <Field
-              label="DIET NOTES"
-              name="diet_notes"
-              type="textarea"
-              defaultValue={profile?.diet_notes ?? ""}
-              placeholder="On strict keto. <25g net carbs. No grains, no sugar. Electrolytes daily."
+              label="TIMEZONE"
+              name="timezone"
+              hint="IANA, e.g. America/Chicago"
+              defaultValue={profile?.timezone ?? ""}
+              placeholder="America/Chicago"
             />
-          </div>
-        </Section>
+            <Field
+              label="AGE (years)"
+              name="age_years"
+              type="number"
+              step="1"
+              defaultValue={profile?.age_years ?? ""}
+              placeholder={String(USER_DEFAULTS.ageYears)}
+            />
+            <Field
+              label="HEIGHT (inches)"
+              name="height_inches"
+              type="number"
+              step="0.25"
+              defaultValue={profile?.height_inches ?? ""}
+              placeholder={String(USER_DEFAULTS.heightInches)}
+            />
+          </Section>
 
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={pending}
-            className="inline-flex items-center gap-2 border px-4 py-2 text-[10px] tracking-widest transition disabled:opacity-50"
-            style={{
-              color: "var(--color-amber)",
-              borderColor:
-                "color-mix(in oklab, var(--color-amber) 50%, transparent)",
-            }}
-          >
-            <Save className="h-3 w-3" aria-hidden />
-            {pending ? "SAVING…" : "SAVE PROFILE"}
-          </button>
-          {state && "error" in state && (
-            <span className="text-xs text-[var(--color-red)]">
-              {state.error}
-            </span>
-          )}
-          {state && "success" in state && savedAt && (
-            <span
-              className="inline-flex items-center gap-1 text-xs"
-              style={{ color: "var(--color-emerald)" }}
+          <Section title="GOALS">
+            <Field
+              label="START WEIGHT (lb)"
+              name="start_weight_lb"
+              type="number"
+              step="0.1"
+              defaultValue={profile?.start_weight_lb ?? ""}
+              placeholder={String(USER_DEFAULTS.startWeightLb)}
+            />
+            <Field
+              label="GOAL WEIGHT (lb)"
+              name="weight_goal_lb"
+              type="number"
+              step="0.1"
+              defaultValue={profile?.weight_goal_lb ?? ""}
+              placeholder={String(USER_DEFAULTS.goalWeightLb)}
+            />
+            <Field
+              label="BODY FAT GOAL (%)"
+              name="bf_goal_pct"
+              type="number"
+              step="0.1"
+              defaultValue={profile?.bf_goal_pct ?? ""}
+              placeholder="12"
+            />
+            <Field
+              label="ACTIVITY MULTIPLIER"
+              name="activity_multiplier"
+              hint="1.2 sedentary → 1.9 athlete"
+              type="number"
+              step="0.05"
+              defaultValue={profile?.activity_multiplier ?? ""}
+              placeholder={String(USER_DEFAULTS.activityMultiplier)}
+            />
+            <div className="sm:col-span-2">
+              <Field
+                label="GOAL NOTES"
+                name="goals_notes"
+                type="textarea"
+                defaultValue={profile?.goals_notes ?? ""}
+                placeholder="What are you chasing? Sub-7 mile, drop to 230, etc."
+              />
+            </div>
+          </Section>
+
+          <Section title="DIET & MACROS">
+            <Field
+              label="DIET STYLE"
+              name="diet_style"
+              hint="free text — keto / standard / low-carb"
+              defaultValue={profile?.diet_style ?? ""}
+              placeholder="keto"
+            />
+            <Field
+              label="CUT DEFICIT (kcal/day)"
+              name="cut_deficit_kcal"
+              hint="negative = surplus"
+              type="number"
+              step="50"
+              defaultValue={profile?.cut_deficit_kcal ?? ""}
+              placeholder={String(USER_DEFAULTS.cutDeficitKcal)}
+            />
+            <Field
+              label="PROTEIN g/lb BODYWEIGHT"
+              name="protein_g_per_lb"
+              type="number"
+              step="0.05"
+              defaultValue={profile?.protein_g_per_lb ?? ""}
+              placeholder={proteinPlaceholder}
+            />
+            <Field
+              label="FAT % OF CALORIES"
+              name="fat_pct_of_calories"
+              hint="0.27 = 27%"
+              type="number"
+              step="0.01"
+              defaultValue={profile?.fat_pct_of_calories ?? ""}
+              placeholder={fatPlaceholder}
+            />
+            <Field
+              label="NET CARB CAP (g/day)"
+              name="net_carbs_max_g"
+              hint="set this for keto / low-carb"
+              type="number"
+              step="1"
+              defaultValue={profile?.net_carbs_max_g ?? ""}
+              placeholder="25"
+            />
+            <div className="sm:col-span-2">
+              <Field
+                label="DIET NOTES"
+                name="diet_notes"
+                type="textarea"
+                defaultValue={profile?.diet_notes ?? ""}
+                placeholder="On strict keto. <25g net carbs. No grains, no sugar. Electrolytes daily."
+              />
+            </div>
+          </Section>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={pending}
+              className="inline-flex items-center gap-2 border px-4 py-2 text-[10px] tracking-widest transition disabled:opacity-50"
+              style={{
+                color: "var(--color-amber)",
+                borderColor:
+                  "color-mix(in oklab, var(--color-amber) 50%, transparent)",
+              }}
             >
-              <Check className="h-3 w-3" aria-hidden /> Saved
-            </span>
-          )}
-        </div>
-      </form>
+              <Save className="h-3 w-3" aria-hidden />
+              {pending ? "SAVING…" : "SAVE PROFILE"}
+            </button>
+            {state && "error" in state && (
+              <span className="text-xs text-[var(--color-red)]">
+                {state.error}
+              </span>
+            )}
+            {state && "success" in state && savedAt && (
+              <span
+                className="inline-flex items-center gap-1 text-xs"
+                style={{ color: "var(--color-emerald)" }}
+              >
+                <Check className="h-3 w-3" aria-hidden /> Saved
+              </span>
+            )}
+          </div>
+        </form>
+      </div>
+
+      <aside className="flex min-h-0 flex-col border border-zinc-900 bg-zinc-950 p-3 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]">
+        <PanelHeader icon={MessageSquare} label="ASK COACH" />
+        <p className="mt-2 mb-3 text-[10px] tracking-widest text-zinc-600">
+          COACH CAN WRITE TO ANY FIELD ON THE LEFT.
+        </p>
+        <CoachUI
+          scrollAreaClassName="min-h-[280px] max-h-[60vh]"
+          emptyHint='Try: "switch me to strict keto, 25g net carbs max, 0.7 fat ratio".'
+        />
+      </aside>
     </div>
   );
 }
