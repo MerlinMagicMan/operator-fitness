@@ -7,7 +7,12 @@ import {
   PHASE_PLAN,
   PEPTIDE_PROTOCOLS,
   calcMacroTargets,
+  macroProfileFromRow,
 } from "@/lib/operator-constants";
+import {
+  updateProfile,
+  type ProfileUpdate,
+} from "@/app/actions/update-profile";
 import type {
   BodyMetricRow,
   DietLogRow,
@@ -53,6 +58,63 @@ function isoDaysAgo(days: number, timezone?: string | null): string {
 
 const COACH_TOOLS: Anthropic.Tool[] = [
   {
+    name: "update_profile",
+    description:
+      "Update Joe's profile and diet settings. Call this whenever he describes a change to his diet style, calorie target, macro split, goals, age/height/weight defaults, or any other profile field. Pass ONLY the fields that are changing — omit everything else. Use null to explicitly clear a field. Examples: switching to keto → {diet_style:'keto', protein_g_per_lb:1.0, fat_pct_of_calories:0.7, net_carbs_max_g:25, diet_notes:'<25g net carbs, electrolytes daily'}. Updating goal weight → {weight_goal_lb:225}.",
+    input_schema: {
+      type: "object",
+      properties: {
+        display_name: { type: ["string", "null"] },
+        timezone: {
+          type: ["string", "null"],
+          description: "IANA timezone, e.g. America/Chicago.",
+        },
+        weight_goal_lb: { type: ["number", "null"] },
+        bf_goal_pct: { type: ["number", "null"] },
+        age_years: { type: ["integer", "null"] },
+        height_inches: { type: ["number", "null"] },
+        start_weight_lb: { type: ["number", "null"] },
+        activity_multiplier: {
+          type: ["number", "null"],
+          description: "TDEE multiplier, 1.0-2.5.",
+        },
+        cut_deficit_kcal: {
+          type: ["integer", "null"],
+          description:
+            "Daily kcal subtracted from TDEE. Negative values = surplus. Range -1500..1500.",
+        },
+        diet_style: {
+          type: ["string", "null"],
+          description:
+            "Free-text label, e.g. 'keto', 'standard cut', 'low-carb', 'maintenance'.",
+        },
+        protein_g_per_lb: {
+          type: ["number", "null"],
+          description:
+            "Protein grams per pound bodyweight. 0.8-1.2 typical, 1.0 default.",
+        },
+        fat_pct_of_calories: {
+          type: ["number", "null"],
+          description:
+            "Fat as fraction of total calories. 0.27 standard, 0.65-0.75 keto.",
+        },
+        net_carbs_max_g: {
+          type: ["integer", "null"],
+          description:
+            "Net carb cap per day. Set for keto / low-carb (e.g. 25). Leave null otherwise.",
+        },
+        diet_notes: {
+          type: ["string", "null"],
+          description: "Free-form notes shown on the diet panel.",
+        },
+        goals_notes: {
+          type: ["string", "null"],
+          description: "Free-form goal notes shown on the profile panel.",
+        },
+      },
+    },
+  },
+  {
     name: "log_meal_from_text",
     description:
       "Parse a free-text meal description (e.g. 'two eggs and a slice of toast') into individual food rows with macros and save them to the user's diet log. Use this whenever the user asks to log, record, or save a meal. Returns a summary of what was saved so you can confirm it back to the user.",
@@ -94,6 +156,21 @@ async function runCoachTool(
   input: Record<string, unknown>,
   timezone: string | null,
 ): Promise<string> {
+  if (name === "update_profile") {
+    try {
+      const result = await updateProfile(input as ProfileUpdate);
+      if ("error" in result) {
+        return JSON.stringify({ error: result.error });
+      }
+      return JSON.stringify({
+        applied: result.applied ?? [],
+        rejected: result.rejected ?? [],
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return JSON.stringify({ error: msg });
+    }
+  }
   if (name !== "log_meal_from_text") {
     return JSON.stringify({ error: `unknown tool ${name}` });
   }
@@ -312,14 +389,27 @@ function buildSystemPrompt({
   activePrograms: ActiveProgramSummary[];
   libraryPrograms: LibraryProgramSummary[];
 }): string {
-  const startISO = profile?.created_at ?? new Date().toISOString();
+  const startISO =
+    profile?.program_start_date != null
+      ? `${profile.program_start_date}T00:00:00Z`
+      : (profile?.created_at ?? new Date().toISOString());
   const phaseInfo = getPhaseInfo(startISO);
   const today = getTodayPrescription(phaseInfo);
   const latest = metrics.find((m) => m.weight_lb != null);
-  const latestWeightLb = latest?.weight_lb ?? USER_DEFAULTS.startWeightLb;
+  const latestWeightLb =
+    latest?.weight_lb ??
+    profile?.start_weight_lb ??
+    USER_DEFAULTS.startWeightLb;
   const goalWeightLb = profile?.weight_goal_lb ?? USER_DEFAULTS.goalWeightLb;
-  const macros = calcMacroTargets(latestWeightLb);
+  const macros = calcMacroTargets(latestWeightLb, macroProfileFromRow(profile));
   const peptide = PEPTIDE_PROTOCOLS[phaseInfo.phase.num];
+  const dietStyle = profile?.diet_style?.trim() || "standard";
+  const dietNotes = profile?.diet_notes?.trim() || null;
+  const goalsNotes = profile?.goals_notes?.trim() || null;
+  const carbLine =
+    macros.netCarbsMaxG != null
+      ? `${macros.netCarbsMaxG}g net carbs (CAPPED)`
+      : `${macros.carbsG}g carbs`;
   const completedThisWeek = workouts.filter((w) => w.completed).length;
   const recentMeals = diet.length;
 
@@ -347,8 +437,10 @@ CURRENT STATUS:
 - Diet log entries in last ${HISTORY_DAYS} days: ${recentMeals}
 - Today is ${localDateISO(profile?.timezone)} (in ${profile?.timezone ?? "America/Chicago"}).
 
-DAILY MACRO TARGETS (Mifflin-St Jeor on current weight):
-- ${macros.calories} kcal / ${macros.proteinG}g protein / ${macros.carbsG}g carbs / ${macros.fatG}g fat
+DIET STYLE: ${dietStyle}${dietNotes ? `\nDIET NOTES: ${dietNotes}` : ""}
+${goalsNotes ? `GOALS NOTES: ${goalsNotes}\n` : ""}
+DAILY MACRO TARGETS (Mifflin-St Jeor on current weight, profile macro split):
+- ${macros.calories} kcal / ${macros.proteinG}g protein / ${carbLine} / ${macros.fatG}g fat
 - Estimated TDEE: ${macros.tdee} kcal; cut deficit ${macros.tdee - macros.calories} kcal
 
 PROGRAM STRUCTURE (44 weeks):
@@ -367,6 +459,7 @@ You can refer to library programs by name when Joe asks about them. He has to en
 
 TOOLS:
 - log_meal_from_text: call this whenever Joe asks to log/record/save a meal. Pass his exact words as text. After it returns, briefly confirm what was saved and the totals.
+- update_profile: call this whenever Joe describes a change to his diet plan, goals, calorie target, macro split, or any profile field. Examples: "I'm doing keto now, 25g net carbs max" → diet_style:"keto", protein_g_per_lb:1.0, fat_pct_of_calories:0.7, net_carbs_max_g:25, and a one-line diet_notes summary. "Drop my goal weight to 225" → weight_goal_lb:225. Pass ONLY the fields that change. Confirm in plain language what you wrote.
 
 TONE:
 Direct, tactical, war-room. No coddling. Reference his actual data when relevant. Keep responses tight — 3-6 sentences unless he asks for depth. Push back on bad ideas. Cite specific protocol when modifying workouts. Longevity over aesthetics.`;

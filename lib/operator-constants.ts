@@ -419,34 +419,112 @@ export type MacroTargets = {
   proteinG: number;
   carbsG: number;
   fatG: number;
+  /** Optional net-carb ceiling — set for keto-style diets. null = no cap. */
+  netCarbsMaxG: number | null;
+  /** Free-form style label that drove the math, e.g. "keto". */
+  dietStyle: string | null;
+};
+
+export type MacroProfileInput = {
+  ageYears?: number | null;
+  heightInches?: number | null;
+  activityMultiplier?: number | null;
+  cutDeficitKcal?: number | null;
+  dietStyle?: string | null;
+  proteinGPerLb?: number | null;
+  fatPctOfCalories?: number | null;
+  netCarbsMaxG?: number | null;
 };
 
 /**
  * Mifflin-St Jeor BMR for males:
  *   BMR = 10*kg + 6.25*cm - 5*age + 5
  * Then TDEE = BMR * activity, cut = TDEE - deficit.
- * Protein anchored at 1g/lb bodyweight, fat at 27% of calories,
- * carbs from the remainder (clamped non-negative).
+ *
+ * Macro split honors the profile when supplied:
+ *   protein  = clamp(weightLb * proteinGPerLb, 60, 320)
+ *   fat      = (calories * fatPctOfCalories) / 9
+ *   carbs    = remainder, capped by netCarbsMaxG when set
+ *
+ * Defaults reproduce the original behavior (1 g/lb protein, 27% fat,
+ * no carb cap) so existing rows render unchanged.
  */
 export function calcMacroTargets(
   weightLb: number,
-  ageYears: number = USER_DEFAULTS.ageYears,
-  heightInches: number = USER_DEFAULTS.heightInches,
-  activityMultiplier: number = USER_DEFAULTS.activityMultiplier,
-  deficitKcal: number = USER_DEFAULTS.cutDeficitKcal,
+  profile: MacroProfileInput = {},
 ): MacroTargets {
+  const ageYears = profile.ageYears ?? USER_DEFAULTS.ageYears;
+  const heightInches = profile.heightInches ?? USER_DEFAULTS.heightInches;
+  const activityMultiplier =
+    profile.activityMultiplier ?? USER_DEFAULTS.activityMultiplier;
+  const deficitKcal = profile.cutDeficitKcal ?? USER_DEFAULTS.cutDeficitKcal;
+  const proteinGPerLb = profile.proteinGPerLb ?? 1.0;
+  const fatPctOfCalories = profile.fatPctOfCalories ?? 0.27;
+
   const weightKg = weightLb * 0.4536;
   const heightCm = heightInches * 2.54;
   const bmr = Math.round(10 * weightKg + 6.25 * heightCm - 5 * ageYears + 5);
   const tdee = Math.round(bmr * activityMultiplier);
   const calories = Math.max(1200, tdee - deficitKcal);
-  const proteinG = Math.min(260, Math.round(weightLb));
-  const fatG = Math.round((calories * 0.27) / 9);
-  const carbsG = Math.max(
+
+  const proteinG = Math.max(
+    60,
+    Math.min(320, Math.round(weightLb * proteinGPerLb)),
+  );
+  let fatG = Math.round((calories * fatPctOfCalories) / 9);
+  let carbsG = Math.max(
     0,
     Math.round((calories - proteinG * 4 - fatG * 9) / 4),
   );
-  return { bmr, tdee, calories, proteinG, carbsG, fatG };
+
+  // Keto / low-carb cap: clamp carbs and push the surplus into fat
+  // so the calorie total still lines up.
+  if (
+    profile.netCarbsMaxG != null &&
+    profile.netCarbsMaxG >= 0 &&
+    carbsG > profile.netCarbsMaxG
+  ) {
+    const excessKcal = (carbsG - profile.netCarbsMaxG) * 4;
+    carbsG = profile.netCarbsMaxG;
+    fatG = Math.max(0, fatG + Math.round(excessKcal / 9));
+  }
+
+  return {
+    bmr,
+    tdee,
+    calories,
+    proteinG,
+    carbsG,
+    fatG,
+    netCarbsMaxG: profile.netCarbsMaxG ?? null,
+    dietStyle: profile.dietStyle ?? null,
+  };
+}
+
+/** Adapter that pulls inputs out of a ProfileRow-shaped object. */
+export function macroProfileFromRow(
+  row: {
+    age_years?: number | null;
+    height_inches?: number | null;
+    activity_multiplier?: number | null;
+    cut_deficit_kcal?: number | null;
+    diet_style?: string | null;
+    protein_g_per_lb?: number | null;
+    fat_pct_of_calories?: number | null;
+    net_carbs_max_g?: number | null;
+  } | null,
+): MacroProfileInput {
+  if (!row) return {};
+  return {
+    ageYears: row.age_years ?? null,
+    heightInches: row.height_inches ?? null,
+    activityMultiplier: row.activity_multiplier ?? null,
+    cutDeficitKcal: row.cut_deficit_kcal ?? null,
+    dietStyle: row.diet_style ?? null,
+    proteinGPerLb: row.protein_g_per_lb ?? null,
+    fatPctOfCalories: row.fat_pct_of_calories ?? null,
+    netCarbsMaxG: row.net_carbs_max_g ?? null,
+  };
 }
 
 // =============================================================

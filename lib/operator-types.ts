@@ -14,6 +14,19 @@ export type ProfileRow = {
   /** Anchor date for phase / week / day calculations (YYYY-MM-DD).
    *  Falls back to created_at if NULL. Reset via resetProgramStart. */
   program_start_date: string | null;
+  age_years: number | null;
+  height_inches: number | null;
+  start_weight_lb: number | null;
+  activity_multiplier: number | null;
+  cut_deficit_kcal: number | null;
+  /** Free-form label: "keto", "standard cut", "low-carb", etc. */
+  diet_style: string | null;
+  protein_g_per_lb: number | null;
+  fat_pct_of_calories: number | null;
+  /** When set, the diet panel surfaces a net-carb cap (used for keto). */
+  net_carbs_max_g: number | null;
+  diet_notes: string | null;
+  goals_notes: string | null;
   created_at: string;
   updated_at: string;
 };

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   USER_DEFAULTS,
   calcMacroTargets,
+  macroProfileFromRow,
   getPhaseInfo,
 } from "@/lib/operator-constants";
 import type {
@@ -190,8 +191,12 @@ export async function POST(request: Request): Promise<Response> {
   const phaseInfo = getPhaseInfo(startISO);
   const latestWeightLb =
     metrics.find((m) => m.weight_lb != null)?.weight_lb ??
+    profile?.start_weight_lb ??
     USER_DEFAULTS.startWeightLb;
-  const targets = calcMacroTargets(latestWeightLb);
+  const targets = calcMacroTargets(
+    latestWeightLb,
+    macroProfileFromRow(profile),
+  );
   const dayTotals = sumRows(dayRows);
 
   let mealRows: DietLogRow[] = [];

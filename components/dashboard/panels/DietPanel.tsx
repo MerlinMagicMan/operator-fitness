@@ -5,10 +5,10 @@ import { Apple, ChevronRight, Plus, Sparkles, X } from "lucide-react";
 import { localDateISO } from "@/lib/date";
 import {
   DIET_GUIDANCE,
-  USER_DEFAULTS,
   calcMacroTargets,
+  macroProfileFromRow,
 } from "@/lib/operator-constants";
-import type { DietLogRow, MealType } from "@/lib/operator-types";
+import type { DietLogRow, MealType, ProfileRow } from "@/lib/operator-types";
 import { MEAL_TYPE_LABEL, formatTimeOfDay } from "@/lib/food/meal-type";
 import { PanelHeader } from "../Primitives";
 import { DietLogModal } from "./DietLogModal";
@@ -228,24 +228,21 @@ export function DietPanel({
   dietLog,
   latestWeightLb,
   phaseNum,
+  profile,
 }: {
   dietLog: DietLogRow[];
   latestWeightLb: number;
   phaseNum: 1 | 2 | 3;
+  profile: ProfileRow | null;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [dayCardOpen, setDayCardOpen] = useState(false);
-  const todayISO = localDateISO();
+  const todayISO = localDateISO(profile?.timezone);
 
   const targets = useMemo(
-    () =>
-      calcMacroTargets(
-        latestWeightLb,
-        USER_DEFAULTS.ageYears,
-        USER_DEFAULTS.heightInches,
-      ),
-    [latestWeightLb],
+    () => calcMacroTargets(latestWeightLb, macroProfileFromRow(profile)),
+    [latestWeightLb, profile],
   );
 
   const todayLog = useMemo(
@@ -291,6 +288,8 @@ export function DietPanel({
   }, [todayLog]);
 
   const guidance = DIET_GUIDANCE[phaseNum];
+  const dietStyle = profile?.diet_style?.trim() ?? null;
+  const dietNotes = profile?.diet_notes?.trim() ?? null;
 
   return (
     <div className="space-y-4 p-4">
@@ -329,9 +328,9 @@ export function DietPanel({
             tone="emerald"
           />
           <MacroBar
-            label="CARBS"
+            label={targets.netCarbsMaxG != null ? "CARBS (CAPPED)" : "CARBS"}
             current={totals.carbs}
-            target={targets.carbsG}
+            target={targets.netCarbsMaxG ?? targets.carbsG}
             unit="g"
             tone="cyan"
           />
@@ -392,6 +391,29 @@ export function DietPanel({
         </div>
 
         <div className="bg-black p-4">
+          {(dietStyle || dietNotes) && (
+            <div
+              className="mb-3 border p-3"
+              style={{
+                borderColor:
+                  "color-mix(in oklab, var(--color-cyan) 30%, transparent)",
+                backgroundColor:
+                  "color-mix(in oklab, var(--color-cyan) 6%, transparent)",
+              }}
+            >
+              <div
+                className="mb-1 text-[10px] tracking-widest"
+                style={{ color: "var(--color-cyan)" }}
+              >
+                DIET STYLE{dietStyle ? ` · ${dietStyle.toUpperCase()}` : ""}
+              </div>
+              {dietNotes && (
+                <div className="whitespace-pre-wrap text-xs text-zinc-300">
+                  {dietNotes}
+                </div>
+              )}
+            </div>
+          )}
           <div className="mb-2 text-[10px] tracking-widest text-zinc-500">
             PHASE {phaseNum} · {guidance.title}
           </div>
