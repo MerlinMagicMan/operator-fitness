@@ -29,6 +29,7 @@ import { DashView } from "@/components/dashboard/panels/DashView";
 import { WeeklyRollup } from "@/components/dashboard/panels/WeeklyRollup";
 import { DietPanel } from "@/components/dashboard/panels/DietPanel";
 import { PeptidePanel } from "@/components/dashboard/panels/PeptidePanel";
+import { ProfilePanel } from "@/components/dashboard/panels/ProfilePanel";
 import {
   ImportPanel,
   type StravaConnection,
@@ -167,13 +168,14 @@ export default async function Home({
   const phaseInfo: PhaseInfo = getPhaseInfo(startISO);
 
   // Latest weight: most recent body_metrics row that has a weight, or fall
-  // back to the start weight default.
+  // back to the start weight from profile / global default.
   const latestWeightLb =
     bodyMetrics.find((m) => m.weight_lb != null)?.weight_lb ??
+    profile?.start_weight_lb ??
     USER_DEFAULTS.startWeightLb;
 
   const goalWeightLb = profile?.weight_goal_lb ?? USER_DEFAULTS.goalWeightLb;
-  const startWeightLb = USER_DEFAULTS.startWeightLb;
+  const startWeightLb = profile?.start_weight_lb ?? USER_DEFAULTS.startWeightLb;
 
   const streak = calculateStreak(
     workoutsCompleted.map((w) => ({ date: w.date, completed: w.completed })),
@@ -262,6 +264,7 @@ export default async function Home({
         dietLog={dietLog}
         latestWeightLb={latestWeightLb}
         phaseNum={phaseInfo.phase.num}
+        profile={profile}
       />
     ),
     peptides: <PeptidePanel phaseNum={phaseInfo.phase.num} />,
@@ -280,6 +283,7 @@ export default async function Home({
         completions={sessionCompletions}
       />
     ),
+    profile: <ProfilePanel profile={profile} />,
   };
 
   return (

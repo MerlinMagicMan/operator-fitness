@@ -10,6 +10,7 @@ import {
   MessageSquare,
   Pill,
   Upload,
+  User,
   type LucideIcon,
 } from "lucide-react";
 import type { PhaseInfo } from "@/lib/operator-constants";
@@ -23,7 +24,8 @@ export type TabId =
   | "diet"
   | "peptides"
   | "import"
-  | "programs";
+  | "programs"
+  | "profile";
 
 /** Server-rendered slot content per tab. Tabs without a slot fall back
  *  to the stub placeholder. */
@@ -36,6 +38,7 @@ const TABS: ReadonlyArray<{ id: TabId; label: string; icon: LucideIcon }> = [
   { id: "peptides", label: "F4 PEP", icon: Pill },
   { id: "import", label: "F5 IMPORT", icon: Upload },
   { id: "programs", label: "F6 PROG", icon: Dumbbell },
+  { id: "profile", label: "F7 PROFILE", icon: User },
 ];
 
 const STUB_BY_TAB: Record<
@@ -71,6 +74,11 @@ const STUB_BY_TAB: Record<
     label: "PROGRAMS",
     icon: Dumbbell,
     message: "Programs unavailable.",
+  },
+  profile: {
+    label: "PROFILE & SETTINGS",
+    icon: User,
+    message: "Profile unavailable.",
   },
 };
 
