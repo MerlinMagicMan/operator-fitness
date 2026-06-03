@@ -437,17 +437,36 @@ export type MacroProfileInput = {
 };
 
 /**
+ * Net-carb ceiling implied by a free-text diet style, used only to fill the
+ * gap when the profile doesn't set net_carbs_max_g explicitly. Matching is
+ * forgiving ("Keto", "ketogenic", "low carb", "low-carb"). Returns null for
+ * styles that don't imply a cap (standard, etc.).
+ */
+function presetNetCarbCap(dietStyle?: string | null): number | null {
+  const s = (dietStyle ?? "").trim().toLowerCase();
+  if (!s) return null;
+  if (s.includes("keto")) return 25;
+  if (s.includes("low") && s.includes("carb")) return 50;
+  return null;
+}
+
+/**
  * Mifflin-St Jeor BMR for males:
  *   BMR = 10*kg + 6.25*cm - 5*age + 5
  * Then TDEE = BMR * activity, cut = TDEE - deficit.
  *
  * Macro split honors the profile when supplied:
- *   protein  = clamp(weightLb * proteinGPerLb, 60, 320)
- *   fat      = (calories * fatPctOfCalories) / 9
- *   carbs    = remainder, capped by netCarbsMaxG when set
+ *   protein = clamp(weightLb * proteinGPerLb, 60, 320)
+ *   carbs   = remainder after a fatPctOfCalories split, clamped to the
+ *             net-carb ceiling (explicit, or inferred from a keto /
+ *             low-carb diet style)
+ *   fat     = the balancing macro — whatever calories remain after protein
+ *             and carbs, so the totals always sum to `calories` and a high
+ *             fat % (or a tight carb cap) never overshoots the target
  *
- * Defaults reproduce the original behavior (1 g/lb protein, 27% fat,
- * no carb cap) so existing rows render unchanged.
+ * Defaults (1 g/lb protein, 27% fat, no carb cap) reproduce the original
+ * split for standard rows; a "keto"/"low-carb" diet_style applies a carb
+ * ceiling on its own, so the label alone yields keto macros.
  */
 export function calcMacroTargets(
   weightLb: number,
@@ -461,6 +480,12 @@ export function calcMacroTargets(
   const proteinGPerLb = profile.proteinGPerLb ?? 1.0;
   const fatPctOfCalories = profile.fatPctOfCalories ?? 0.27;
 
+  // A named low-carb diet style (e.g. "keto") implies a net-carb ceiling
+  // even when the user never typed an explicit number — so the label alone
+  // produces keto macros. An explicit net_carbs_max_g always wins.
+  const netCarbsMaxG =
+    profile.netCarbsMaxG ?? presetNetCarbCap(profile.dietStyle);
+
   const weightKg = weightLb * 0.4536;
   const heightCm = heightInches * 2.54;
   const bmr = Math.round(10 * weightKg + 6.25 * heightCm - 5 * ageYears + 5);
@@ -471,23 +496,23 @@ export function calcMacroTargets(
     60,
     Math.min(320, Math.round(weightLb * proteinGPerLb)),
   );
-  let fatG = Math.round((calories * fatPctOfCalories) / 9);
+  const proteinKcal = proteinG * 4;
+
+  // Carbs start from the fat-split remainder, then clamp to the net-carb
+  // ceiling. Fat is the balancing macro: it absorbs whatever calories are
+  // left after protein and carbs, so the macros always sum to `calories`
+  // (a high fat % or a tight carb cap can never overshoot the target).
   let carbsG = Math.max(
     0,
-    Math.round((calories - proteinG * 4 - fatG * 9) / 4),
+    Math.round((calories - proteinKcal - calories * fatPctOfCalories) / 4),
   );
-
-  // Keto / low-carb cap: clamp carbs and push the surplus into fat
-  // so the calorie total still lines up.
-  if (
-    profile.netCarbsMaxG != null &&
-    profile.netCarbsMaxG >= 0 &&
-    carbsG > profile.netCarbsMaxG
-  ) {
-    const excessKcal = (carbsG - profile.netCarbsMaxG) * 4;
-    carbsG = profile.netCarbsMaxG;
-    fatG = Math.max(0, fatG + Math.round(excessKcal / 9));
+  if (netCarbsMaxG != null && netCarbsMaxG >= 0) {
+    carbsG = Math.min(carbsG, netCarbsMaxG);
   }
+  const fatG = Math.max(
+    0,
+    Math.round((calories - proteinKcal - carbsG * 4) / 9),
+  );
 
   return {
     bmr,
@@ -496,7 +521,7 @@ export function calcMacroTargets(
     proteinG,
     carbsG,
     fatG,
-    netCarbsMaxG: profile.netCarbsMaxG ?? null,
+    netCarbsMaxG: netCarbsMaxG ?? null,
     dietStyle: profile.dietStyle ?? null,
   };
 }
