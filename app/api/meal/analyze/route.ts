@@ -234,11 +234,24 @@ export async function POST(request: Request): Promise<Response> {
     f: targets.fatG,
   };
 
+  const dietStyleLabel = targets.dietStyle?.trim() || "standard";
+  const carbCapNote =
+    targets.netCarbsMaxG != null
+      ? ` — net carbs are a HARD CEILING at ${targets.netCarbsMaxG}g/day; fat is the fuel macro that fills the calorie balance, not something to minimize`
+      : "";
+  // On a capped/keto plan, carbs are the limiting macro and fat is fuel.
+  // Steer the analyst away from generic "cut fat, chase protein" advice.
+  const ketoJobLine =
+    targets.netCarbsMaxG != null
+      ? `- Joe runs ${dietStyleLabel}: judge meals by NET CARBS first (hard cap ${targets.netCarbsMaxG}g/day) — high-carb foods are the real risk. Fat is his fuel macro: NEVER tell him to cut fat to make room for protein.\n`
+      : "";
+
   const systemPrompt = `You are Joe's nutrition analyst inside the OPERATOR app.
 
 CONTEXT:
 - Phase ${phaseInfo.phase.num} ${phaseInfo.phase.name} (week ${phaseInfo.weekNum}/44) — ${phaseInfo.phase.focus}
 - Latest weight: ${latestWeightLb} lb
+- Diet style: ${dietStyleLabel}${carbCapNote}
 - Daily targets: ${macroLine(targetMacros)}
 - Today (${date}) totals so far: ${macroLine(dayTotals)}
   → remaining: ${Math.round(targets.calories - dayTotals.kcal)} kcal / ${Math.max(0, Math.round(targets.proteinG - dayTotals.p))}g P / ${Math.max(0, Math.round(targets.carbsG - dayTotals.c))}g C / ${Math.max(0, Math.round(targets.fatG - dayTotals.f))}g F
@@ -249,7 +262,7 @@ ${scope === "meal" ? `THIS MEAL:\n${mealDescription}` : `SCOPE: full day rollup`
 
 YOUR JOB:
 - ${scope === "meal" ? "Analyze THIS MEAL: how it fits the day, what it nudges, any obvious swap." : "Analyze the day so far: hits/misses vs targets, what to eat next."}
-- Reply in 2-3 short sentences for the opening read. Expand only when Joe asks.
+${ketoJobLine}- Reply in 2-3 short sentences for the opening read. Expand only when Joe asks.
 - Reference real numbers from the context, not platitudes.
 - If asked for swaps or alternatives, give a concrete portion (e.g. "swap the rice for 4oz sweet potato — same carbs, more fiber").
 - Direct, tactical, war-room tone. No motivational filler.`;
