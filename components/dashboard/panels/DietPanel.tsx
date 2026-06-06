@@ -1,8 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Apple, ChevronRight, Plus, Sparkles, X } from "lucide-react";
-import { localDateISO } from "@/lib/date";
+import {
+  Apple,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Sparkles,
+  X,
+} from "lucide-react";
+import { localDateISO, relativeDayLabel, shiftISODate } from "@/lib/date";
 import {
   DIET_GUIDANCE,
   calcMacroTargets,
@@ -239,18 +246,31 @@ export function DietPanel({
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [dayCardOpen, setDayCardOpen] = useState(false);
   const todayISO = localDateISO(profile?.timezone);
+  const [selectedDate, setSelectedDate] = useState(todayISO);
+  const isToday = selectedDate === todayISO;
+
+  // Move the viewed day; collapse any open analysis so we don't show a
+  // previous day's read against the new day. Never navigate past today.
+  const navigateDay = (delta: number) => {
+    setSelectedDate((cur) => {
+      const next = shiftISODate(cur, delta);
+      return next > todayISO ? cur : next;
+    });
+    setExpandedRowId(null);
+    setDayCardOpen(false);
+  };
 
   const targets = useMemo(
     () => calcMacroTargets(latestWeightLb, macroProfileFromRow(profile)),
     [latestWeightLb, profile],
   );
 
-  const todayLog = useMemo(
-    () => dietLog.filter((e) => e.date === todayISO),
-    [dietLog, todayISO],
+  const dayLog = useMemo(
+    () => dietLog.filter((e) => e.date === selectedDate),
+    [dietLog, selectedDate],
   );
 
-  const todayGroups = useMemo(() => {
+  const dayGroups = useMemo(() => {
     const buckets: Record<MealType | "other", DietLogRow[]> = {
       breakfast: [],
       lunch: [],
@@ -258,7 +278,7 @@ export function DietPanel({
       snack: [],
       other: [],
     };
-    for (const r of todayLog) {
+    for (const r of dayLog) {
       const key: MealType | "other" = r.meal_type ?? "other";
       buckets[key].push(r);
     }
@@ -273,10 +293,10 @@ export function DietPanel({
       });
     }
     return buckets;
-  }, [todayLog]);
+  }, [dayLog]);
 
   const totals = useMemo(() => {
-    return todayLog.reduce(
+    return dayLog.reduce(
       (acc, e) => ({
         calories: acc.calories + (e.calories ?? 0),
         protein: acc.protein + (e.protein_g ?? 0),
@@ -285,7 +305,7 @@ export function DietPanel({
       }),
       { calories: 0, protein: 0, carbs: 0, fat: 0 },
     );
-  }, [todayLog]);
+  }, [dayLog]);
 
   const guidance = DIET_GUIDANCE[phaseNum];
   const dietStyle = profile?.diet_style?.trim() ?? null;
@@ -298,8 +318,27 @@ export function DietPanel({
       <div className="grid grid-cols-1 gap-px bg-zinc-900 lg:grid-cols-2">
         <div className="bg-black p-4">
           <div className="mb-3 flex items-center justify-between">
-            <div className="text-[10px] tracking-widest text-zinc-500">
-              TODAY · {todayISO}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => navigateDay(-1)}
+                className="text-zinc-600 hover:text-zinc-200"
+                aria-label="Previous day"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+              </button>
+              <div className="text-[10px] tracking-widest text-zinc-500">
+                {relativeDayLabel(selectedDate, todayISO)} · {selectedDate}
+              </div>
+              <button
+                type="button"
+                onClick={() => navigateDay(1)}
+                disabled={isToday}
+                className="text-zinc-600 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-30"
+                aria-label="Next day"
+              >
+                <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+              </button>
             </div>
             <button
               type="button"
@@ -311,7 +350,7 @@ export function DietPanel({
             </button>
           </div>
 
-          <QuickLogMeal date={todayISO} />
+          <QuickLogMeal key={selectedDate} date={selectedDate} />
 
           <MacroBar
             label="CALORIES"
@@ -345,9 +384,9 @@ export function DietPanel({
           <div className="mt-4 border-t border-zinc-900 pt-3">
             <div className="mb-2 flex items-center justify-between">
               <div className="text-[10px] tracking-widest text-zinc-500">
-                TODAY&apos;S MEALS
+                {isToday ? "TODAY'S MEALS" : "MEALS"}
               </div>
-              {todayLog.length > 0 && (
+              {dayLog.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setDayCardOpen((v) => !v)}
@@ -359,9 +398,9 @@ export function DietPanel({
                 </button>
               )}
             </div>
-            {todayLog.length === 0 ? (
+            {dayLog.length === 0 ? (
               <div className="py-3 text-center text-xs text-zinc-600">
-                Log your first meal.
+                {isToday ? "Log your first meal." : "No meals logged this day."}
               </div>
             ) : (
               <div className="space-y-3">
@@ -369,7 +408,7 @@ export function DietPanel({
                   <MealGroup
                     key={g}
                     groupKey={g}
-                    rows={todayGroups[g]}
+                    rows={dayGroups[g]}
                     expandedId={expandedRowId}
                     onToggleRow={(id) =>
                       setExpandedRowId((prev) => (prev === id ? null : id))
@@ -378,11 +417,11 @@ export function DietPanel({
                 ))}
               </div>
             )}
-            {dayCardOpen && todayLog.length > 0 && (
+            {dayCardOpen && dayLog.length > 0 && (
               <div className="mt-3">
                 <MealAnalysisCard
                   scope="day"
-                  date={todayISO}
+                  date={selectedDate}
                   onDismiss={() => setDayCardOpen(false)}
                 />
               </div>
@@ -466,7 +505,7 @@ export function DietPanel({
       <DietLogModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        defaultDate={todayISO}
+        defaultDate={selectedDate}
       />
     </div>
   );

@@ -106,7 +106,7 @@ export function CoachUI({
     <div className="flex min-h-0 flex-1 flex-col">
       <div
         ref={scrollRef}
-        className={`flex-1 space-y-3 overflow-y-auto pr-1 ${scrollAreaClassName ?? "min-h-[300px]"}`}
+        className={`flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1 ${scrollAreaClassName ?? "min-h-[300px]"}`}
       >
         {chat.length === 0 && (
           <div className="space-y-2 text-xs text-zinc-600">

@@ -36,6 +36,12 @@ export const dynamic = "force-dynamic";
 const COACH_MODEL = "claude-sonnet-4-6";
 const MAX_TOKENS = 1024;
 const HISTORY_DAYS = 14;
+// Diet history reaches back further than workouts/metrics so the coach can
+// reason about eating trends ("what did I eat yesterday", weekly averages).
+const DIET_HISTORY_DAYS = 30;
+// Show full per-meal detail for the most recent N days; older days collapse
+// to a daily-totals line to keep the prompt bounded.
+const DIET_DETAIL_DAYS = 10;
 const MAX_INCOMING_MESSAGES = 40;
 const MAX_TOOL_ROUNDS = 4;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -374,6 +380,85 @@ function formatLibraryPrograms(summaries: LibraryProgramSummary[]): string {
     .join("\n");
 }
 
+const MEAL_TYPE_ORDER: Record<string, number> = {
+  breakfast: 0,
+  lunch: 1,
+  dinner: 2,
+  snack: 3,
+};
+
+function macroLine(t: {
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}): string {
+  return `${Math.round(t.kcal)} kcal / ${Math.round(t.protein)}p / ${Math.round(t.carbs)}c / ${Math.round(t.fat)}f`;
+}
+
+/**
+ * Render the diet log grouped by day, newest first. Recent days
+ * (DIET_DETAIL_DAYS) get a per-meal breakdown so the coach can answer
+ * "what did I eat yesterday"; older days collapse to a daily-totals line
+ * so longer-term trends stay visible without blowing the token budget.
+ */
+function formatDietLog(diet: DietLogRow[]): string {
+  if (diet.length === 0) {
+    return "  (no meals logged in the last " + DIET_HISTORY_DAYS + " days)";
+  }
+
+  const byDate = new Map<string, DietLogRow[]>();
+  for (const row of diet) {
+    const list = byDate.get(row.date);
+    if (list) list.push(row);
+    else byDate.set(row.date, [row]);
+  }
+
+  const dates = Array.from(byDate.keys()).sort((a, b) => b.localeCompare(a));
+
+  const dayTotals = (rows: DietLogRow[]) =>
+    rows.reduce(
+      (acc, r) => ({
+        kcal: acc.kcal + (r.calories ?? 0),
+        protein: acc.protein + (r.protein_g ?? 0),
+        carbs: acc.carbs + (r.carbs_g ?? 0),
+        fat: acc.fat + (r.fat_g ?? 0),
+      }),
+      { kcal: 0, protein: 0, carbs: 0, fat: 0 },
+    );
+
+  const lines: string[] = [];
+  dates.forEach((date, idx) => {
+    const rows = byDate.get(date) ?? [];
+    const totals = dayTotals(rows);
+    lines.push(
+      `  ${date} — ${macroLine(totals)} (${rows.length} ${rows.length === 1 ? "item" : "items"})`,
+    );
+    if (idx < DIET_DETAIL_DAYS) {
+      const sorted = rows.slice().sort((a, b) => {
+        const ma = MEAL_TYPE_ORDER[a.meal_type ?? ""] ?? 4;
+        const mb = MEAL_TYPE_ORDER[b.meal_type ?? ""] ?? 4;
+        if (ma !== mb) return ma - mb;
+        if (a.eaten_at && b.eaten_at)
+          return a.eaten_at.localeCompare(b.eaten_at);
+        return a.created_at.localeCompare(b.created_at);
+      });
+      for (const r of sorted) {
+        const slot = r.meal_type ? `[${r.meal_type}] ` : "";
+        const macros = macroLine({
+          kcal: r.calories ?? 0,
+          protein: r.protein_g ?? 0,
+          carbs: r.carbs_g ?? 0,
+          fat: r.fat_g ?? 0,
+        });
+        lines.push(`      · ${slot}${r.meal} — ${macros}`);
+      }
+    }
+  });
+
+  return lines.join("\n");
+}
+
 function buildSystemPrompt({
   profile,
   metrics,
@@ -412,6 +497,7 @@ function buildSystemPrompt({
       : `${macros.carbsG}g carbs`;
   const completedThisWeek = workouts.filter((w) => w.completed).length;
   const recentMeals = diet.length;
+  const dietLogFormatted = formatDietLog(diet);
 
   const phasePlanSummary = PHASE_PLAN.map(
     (p) =>
@@ -434,7 +520,7 @@ CURRENT STATUS:
 - Today's prescribed workout: ${today.name} (${today.tag} · ${today.duration})
 - Today's target: ${today.target}
 - Workouts completed in last ${HISTORY_DAYS} days: ${completedThisWeek}
-- Diet log entries in last ${HISTORY_DAYS} days: ${recentMeals}
+- Diet log entries in last ${DIET_HISTORY_DAYS} days: ${recentMeals}
 - Today is ${localDateISO(profile?.timezone)} (in ${profile?.timezone ?? "America/Chicago"}).
 
 DIET STYLE: ${dietStyle}${dietNotes ? `\nDIET NOTES: ${dietNotes}` : ""}
@@ -442,6 +528,11 @@ ${goalsNotes ? `GOALS NOTES: ${goalsNotes}\n` : ""}
 DAILY MACRO TARGETS (Mifflin-St Jeor on current weight, profile macro split):
 - ${macros.calories} kcal / ${macros.proteinG}g protein / ${carbLine} / ${macros.fatG}g fat
 - Estimated TDEE: ${macros.tdee} kcal; cut deficit ${macros.tdee - macros.calories} kcal
+
+RECENT DIET LOG (last ${DIET_HISTORY_DAYS} days, newest first; per-meal detail for the most recent ${DIET_DETAIL_DAYS} days, daily totals only beyond that):
+${dietLogFormatted}
+
+This is Joe's actual logged intake. Use it directly — when he asks what he ate on a specific day, look it up here. When he asks about averages or trends, compute them from these daily totals. Do NOT claim you lack access to his history; you have the full ${DIET_HISTORY_DAYS}-day log above. If a day is missing, it means nothing was logged that day.
 
 PROGRAM STRUCTURE (44 weeks):
 ${phasePlanSummary}
@@ -503,6 +594,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const since = isoDaysAgo(HISTORY_DAYS);
+  const dietSince = isoDaysAgo(DIET_HISTORY_DAYS);
   const [
     profileR,
     metricsR,
@@ -530,7 +622,7 @@ export async function POST(request: Request): Promise<Response> {
       .from("diet_log")
       .select("*")
       .eq("user_id", user.id)
-      .gte("date", since)
+      .gte("date", dietSince)
       .order("date", { ascending: false }),
     supabase.from("programs").select("*").eq("owner_user_id", user.id),
     supabase
