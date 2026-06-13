@@ -30,7 +30,7 @@ export function CoachDrawer({
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative flex w-full max-w-md flex-col border-l border-zinc-800 bg-black"
+        className="relative flex h-full w-full max-w-md flex-col overflow-hidden border-l border-zinc-800 bg-black"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
@@ -53,7 +53,7 @@ export function CoachDrawer({
             <X className="h-4 w-4" aria-hidden />
           </button>
         </div>
-        <div className="flex flex-1 flex-col p-4">
+        <div className="flex min-h-0 flex-1 flex-col p-4">
           <CoachUI
             scrollAreaClassName="min-h-0"
             emptyHint="Coach is on. Ask anything about your training, diet, peptides, or programming."
