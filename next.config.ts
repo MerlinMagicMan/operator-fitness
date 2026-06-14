@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 // next-pwa ships without first-party TypeScript types.
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const withPWA = require("next-pwa") as (
   options: Record<string, unknown>,
 ) => (config: NextConfig) => NextConfig;
