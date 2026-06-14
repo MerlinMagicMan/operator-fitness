@@ -39,6 +39,11 @@ const HISTORY_DAYS = 14;
 // Diet history reaches back further than workouts/metrics so the coach can
 // reason about eating trends ("what did I eat yesterday", weekly averages).
 const DIET_HISTORY_DAYS = 30;
+// Weigh-in history reaches back furthest of all: the coach needs to answer
+// "what did I weigh on 5/17" and reason about weight trends across a cut,
+// which spans many weeks. Workout counts still use the shorter HISTORY_DAYS
+// window below.
+const WEIGHT_HISTORY_DAYS = 120;
 // Show full per-meal detail for the most recent N days; older days collapse
 // to a daily-totals line to keep the prompt bounded.
 const DIET_DETAIL_DAYS = 10;
@@ -459,6 +464,31 @@ function formatDietLog(diet: DietLogRow[]): string {
   return lines.join("\n");
 }
 
+/**
+ * Render the weigh-in history (dated body_metrics rows), newest first, so the
+ * coach can look up what Joe weighed on a specific day and reason about the
+ * trend. Each row already represents one calendar day (composite key
+ * user_id+date in log-weight). Includes body-fat / waist when present so the
+ * coach can speak to recomposition, not just scale weight.
+ */
+function formatWeighInHistory(metrics: BodyMetricRow[]): string {
+  const weighIns = metrics.filter((m) => m.weight_lb != null);
+  if (weighIns.length === 0) {
+    return (
+      "  (no weigh-ins logged in the last " + WEIGHT_HISTORY_DAYS + " days)"
+    );
+  }
+  return weighIns
+    .map((m) => {
+      const extras: string[] = [];
+      if (m.bf_pct != null) extras.push(`${m.bf_pct}% bf`);
+      if (m.waist_inches != null) extras.push(`${m.waist_inches}" waist`);
+      const tail = extras.length ? ` (${extras.join(", ")})` : "";
+      return `  ${m.date} — ${m.weight_lb} lb${tail}`;
+    })
+    .join("\n");
+}
+
 function buildSystemPrompt({
   profile,
   metrics,
@@ -498,6 +528,7 @@ function buildSystemPrompt({
   const completedThisWeek = workouts.filter((w) => w.completed).length;
   const recentMeals = diet.length;
   const dietLogFormatted = formatDietLog(diet);
+  const weighInHistoryFormatted = formatWeighInHistory(metrics);
 
   const phasePlanSummary = PHASE_PLAN.map(
     (p) =>
@@ -533,6 +564,11 @@ RECENT DIET LOG (last ${DIET_HISTORY_DAYS} days, newest first; per-meal detail f
 ${dietLogFormatted}
 
 This is Joe's actual logged intake. Use it directly — when he asks what he ate on a specific day, look it up here. When he asks about averages or trends, compute them from these daily totals. Do NOT claim you lack access to his history; you have the full ${DIET_HISTORY_DAYS}-day log above. If a day is missing, it means nothing was logged that day.
+
+WEIGH-IN HISTORY (last ${WEIGHT_HISTORY_DAYS} days, newest first — each line is one logged weigh-in):
+${weighInHistoryFormatted}
+
+This is Joe's actual timestamped weigh-in log, not just a snapshot. When he asks what he weighed on a specific date (e.g. "my weigh-in on 5/17"), look it up here. When he asks about weight trends or rate of loss, compute them from these dated entries. Do NOT claim you only have a current-weight snapshot or that you lack a weigh-in history — the dated log is above. If a date is missing, no weigh-in was logged that day. "Latest weight" above is simply the most recent of these entries.
 
 PROGRAM STRUCTURE (44 weeks):
 ${phasePlanSummary}
@@ -595,6 +631,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const since = isoDaysAgo(HISTORY_DAYS);
   const dietSince = isoDaysAgo(DIET_HISTORY_DAYS);
+  const weightSince = isoDaysAgo(WEIGHT_HISTORY_DAYS);
   const [
     profileR,
     metricsR,
@@ -610,7 +647,7 @@ export async function POST(request: Request): Promise<Response> {
       .from("body_metrics")
       .select("*")
       .eq("user_id", user.id)
-      .gte("date", since)
+      .gte("date", weightSince)
       .order("date", { ascending: false }),
     supabase
       .from("workouts_completed")
